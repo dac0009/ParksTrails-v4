@@ -1,9 +1,12 @@
 """Tests for the pure-Python route engine (notebook Cells 7-10) - no arcpy needed.
 Run:  python tests/test_route_engine.py      (exit code 0 = all passed)"""
 import sys, os, re, time, types, random, io, contextlib
-from collections import defaultdict, Counter
+from collections import defaultdict
 
-NB = os.path.join(os.path.dirname(__file__), "..", "notebooks", "MCP_Trails_Complete_Notebook.py")
+HERE = os.path.dirname(os.path.abspath(__file__))
+NB = next(p for p in (os.path.join(HERE, "MCP_Trails_Complete_Notebook.py"),
+                      os.path.join(HERE, "..", "notebooks", "MCP_Trails_Complete_Notebook.py"),
+                      os.path.join(HERE, "notebooks", "MCP_Trails_Complete_Notebook.py")) if os.path.exists(p))
 sys.modules["arcpy"] = types.ModuleType("arcpy")            # notebook imports arcpy; engine cells never call it
 SRC = open(NB, encoding="utf-8").read()
 CELLS = {int(m.group(1)): c for c in re.split(r"(?=# %% =+\n# CELL \d+ )", SRC)
@@ -13,7 +16,7 @@ UF_SRC = re.search(r"class UF:.*?(?=\ndef cell)", CELLS[6], re.S).group(0)
 def run_engine(edges):
     ns = {}
     exec(CELLS[0], ns)
-    ns.update(hdr=lambda t: None, lap=lambda l: None, _chk=[], _sc=[], U=1.0, MI=5280.0, MAX_TIER=2,
+    ns.update(hdr=lambda t: None, lap=lambda l: None, begin=lambda n, v: None, finish=lambda n: None, _chk=[], _sc=[], U=1.0, MI=5280.0, MAX_TIER=2,
               crossing_nodes=set(), edges=edges, DIFF_F="Difficulty",
               is_blank=lambda v: v is None or (isinstance(v, str) and not v.strip()),
               diff_rank=lambda v: {"Easy": 1, "Moderate": 2, "Difficult": 3}.get(v, 0))
@@ -36,7 +39,8 @@ def synth(N, seed, tiers=(70, 15, 15), conn_tiers=(40, 20, 40), keep=0.95):
                               g=None, len=l, u=a, v=b, name=name, pub="Connector" if "conn" in name else name,
                               cls=("OFFICIAL", "UNKNOWN", "UNAUTHORIZED")[t], tier=t,
                               surf=rng.choice(["Paved", "Natural"]), diff=rng.choice(["Easy", "Moderate", None]),
-                              rank=rng.choice(["Primary", "Secondary"]), marker=rng.choice(["Red", None])))
+                              rank=rng.choice(["Primary", "Secondary"]), marker=rng.choice(["Red", None]),
+                              acc=rng.choice(["Yes", "No", None])))
     for r in range(N):
         for c in range(N):
             i = r * N + c
@@ -119,6 +123,32 @@ def test_runtime_bounded_on_dense_networks():
         ns, t = run_engine(synth(N, N))
         invariants(ns)
         assert t < 60, "engine took %.1f s on %dx%d" % (t, N, N)
+
+def test_stage_guards_block_partial_runs():
+    """A failed/skipped cell must stop later cells (this is what wrote empty tables before)."""
+    helpers = re.search(r"# ---- stage guards.*?(?=CHECKS, SHORTCUTS)", CELLS[1], re.S).group(0)
+    ns = {"C": {"NB_VERSION": "X"}, "NBV": "X", "lap": lambda l: None, "arcpy": None}
+    exec(helpers, ns)
+    for n in range(2, 9):
+        ns["begin"](n, "X"); ns["finish"](n)
+    ns["begin"](9, "X")                      # cell 9 starts ... and crashes (never calls finish)
+    try:
+        ns["begin"](10, "X"); raise AssertionError("cell 10 ran after cell 9 failed")
+    except RuntimeError:
+        pass
+    ns["begin"](4, "X")                      # rerunning an early cell invalidates the later ones
+    assert not any(k >= 4 for k in ns["DONE"])
+    try:
+        ns["begin"](5, "OLD"); raise AssertionError("mixed notebook versions were accepted")
+    except RuntimeError:
+        pass
+
+def test_every_cell_is_guarded_and_versioned():
+    v = re.search(r'"NB_VERSION": "([^"]+)"', CELLS[0]).group(1)
+    for n in range(2, 15):
+        assert 'begin(%d, "%s")' % (n, v) in CELLS[n], "cell %d missing begin()" % n
+        assert "finish(%d)" % n in CELLS[n], "cell %d missing finish()" % n
+    assert "raise RuntimeError" in CELLS[11] and "if not REC" in CELLS[11], "cell 11 must refuse empty overwrite"
 
 if __name__ == "__main__":
     failed = 0
