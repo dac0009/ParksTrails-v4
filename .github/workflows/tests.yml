@@ -7,5 +7,5 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: {python-version: "3.11"}
-      - run: pip install pyflakes && python -m pyflakes notebooks/
-      - run: python tests/test_route_engine.py
+      - run: pip install pyflakes && python -m pyflakes MCP_Trails_Complete_Notebook.py test_route_engine.py
+      - run: python test_route_engine.py
