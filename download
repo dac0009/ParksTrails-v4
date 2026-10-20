@@ -1,0 +1,5 @@
+*.gdb/
+*.lock
+MCP_Reports/
+__pycache__/
+*.pyc
