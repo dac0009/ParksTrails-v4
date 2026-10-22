@@ -23,11 +23,11 @@ import arcpy, os, re, csv, math, datetime, heapq, hashlib, time
 from collections import defaultdict, Counter
 
 C = {
-    "NB_VERSION": "2026-10-20c",       # every cell checks this; paste CELL 0 from the SAME file version
+    "NB_VERSION": "2026-10-22a",       # every cell checks this; paste CELL 0 from the SAME file version
     # --- sources (URL first; if it fails, the portal is searched by title) ---
     "TRAILS_URL": "https://utility.arcgis.com/usrsvcs/servers/b06af5c508a44ce7a42803653b675371/rest/services/Assets/MCPC_Park_Trails/FeatureServer/0",
     "TRAILS_SEARCH_TITLE": "Mercer County Park Commission Trails",
-    "BOUNDARY_URL": None,
+    "BOUNDARY_URL": "https://services2.arcgis.com/VhIw2Us69kT1MDLQ/arcgis/rest/services/MCPC_Boundaries_Public/FeatureServer/0",
     "BOUNDARY_SEARCH_TITLE": "MCPC_Boundaries_Public",
     "PARK_NAME_EXACT_REGEX": r"^\s*mercer\s+county\s+park\s*$",
     "PARK_NAME_LOOSE": "mercer county park",
@@ -69,7 +69,9 @@ C = {
     "SEED_CAP": 15000, "BEAM_PER_CLASS": 120, "BEAM_ROUNDS": 10, "LOOP_EVAL_CAP": 15000,
     "LENGTH_CLASSES": [("Short", 0.0, 1.0), ("Medium", 1.0, 3.0), ("Long", 3.0, 99.0)],
     "PICK_PER_CLASS": {"Short": 5, "Medium": 5, "Long": 4},
-    "PICK_PARKS_DECISION": 6,
+    "PICK_PARKS_DECISION_PER_CLASS": 2,   # Parks-decision loops picked per length class (Short/Medium/Long)
+    "NAMED_MIN_MI": 0.1,                  # named-trail sections shorter than this are slivers, not CORE
+    "NAMED_BRIDGE_MAX_MI": 0.25,          # pieces of one named trail are joined through other trails if <= this apart
     "MAX_OVERLAP": 0.5,
     "MAX_CANDIDATES_WRITTEN": 500,    # candidates table keeps the top-scoring routes only (speed); recommended routes are always written
     "SPUR_MIN_MI": 0.15,
@@ -87,7 +89,7 @@ C = {
 def hdr(t):
     print("\n" + "=" * 78 + "\n" + t + "\n" + "=" * 78)
 
-NBV = "2026-10-20c"
+NBV = "2026-10-22a"
 if C.get("NB_VERSION") != NBV:
     raise RuntimeError("CELL 0 is from a different notebook version. Paste and run CELL 0 from this file, then CELL 1.")
 aprx = arcpy.mp.ArcGISProject("CURRENT")
@@ -238,7 +240,7 @@ print("Helpers loaded:", RUN_TS)
 # %% ==========================================================================
 # CELL 2 - RESOLVE SOURCES (read only; no map layers needed)
 # =============================================================================
-begin(2, "2026-10-20c")
+begin(2, "2026-10-22a")
 hdr("CELL 2 - RESOLVE SOURCES")
 def resolve(url, title, hint_rx):
     if url:
@@ -279,7 +281,7 @@ finish(2)
 # %% ==========================================================================
 # CELL 3 - LOCAL SNAPSHOTS (your own copy; all fields, GlobalIDs, source keys)
 # =============================================================================
-begin(3, "2026-10-20c")
+begin(3, "2026-10-22a")
 hdr("CELL 3 - LOCAL SNAPSHOTS")
 def fingerprint(g, prec):
     if g is None:
@@ -342,7 +344,7 @@ finish(3)
 # %% ==========================================================================
 # CELL 4 - MERCER COUNTY PARK SUBSET + EDITABLE WORKING COPY
 # =============================================================================
-begin(4, "2026-10-20c")
+begin(4, "2026-10-22a")
 hdr("CELL 4 - PARK SUBSET + WORKING COPY")
 try:
     WORK_SR = arcpy.SpatialReference(C["WORK_SR_WKID"])
@@ -521,7 +523,7 @@ finish(4)
 # %% ==========================================================================
 # CELL 5 - READ WORKING COPY AND CLASSIFY  (rerun from here after manual edits)
 # =============================================================================
-begin(5, "2026-10-20c")
+begin(5, "2026-10-22a")
 hdr("CELL 5 - READ AND CLASSIFY")
 doms = coded_domains(PHYS)
 def fld(rx):
@@ -542,13 +544,13 @@ if UNMARKED:
 print("name=%s designation=%s status=%s surface=%s difficulty=%s rank=%s marker=%s"
       % (NAME_F, DESIG_F, STATUS_F, SURF_F, DIFF_F, RANK_F, MARK_F))
 
-def desig_class(d, s):
-    ds, ss = str(d or "").lower(), str(s or "").lower()
+def desig_class(d, s, name=""):
+    ds, ss, nm = str(d or "").lower(), str(s or "").lower(), str(name or "").lower()
     if "closed" in ss:
         return "CLOSED"
-    if "proposed" in ds or "proposed" in ss:
+    if "proposed" in ds or "proposed" in ss or "proposed" in nm:
         return "PROPOSED"
-    if re.search(r"unauthori|unofficial|social|informal", ds):
+    if re.search(r"unauthori|unofficial|social|informal", ds + " " + nm):
         return "UNAUTHORIZED"
     return "OFFICIAL" if "official" in ds else "UNKNOWN"
 
@@ -581,7 +583,7 @@ with arcpy.da.SearchCursor(PHYS, rf) as cur:
         d = dict(zip(rf, row))
         dec = lambda f: (doms.get(f, {}).get(d[f], d[f]) if f else None)
         nm = str(dec(NAME_F)).strip() if NAME_F and not is_blank(d.get(NAME_F)) else "(unnamed)"
-        cls = desig_class(dec(DESIG_F), dec(STATUS_F))
+        cls = desig_class(dec(DESIG_F), dec(STATUS_F), nm)
         fi = len(feats)
         feats.append({"oid": d["OID@"], "gid": d["SRC_GLOBALID"], "name": nm, "pub": public_name(nm), "cls": cls,
                       "tier": TIER_OF[cls], "surf": surface_class(dec(SURF_F)), "diff": dec(DIFF_F),
@@ -597,6 +599,12 @@ with arcpy.da.SearchCursor(PHYS, rf) as cur:
             if pl.length > 0:
                 parts.append({"fi": fi, "pi": pi, "g": pl, "len": pl.length, "ext": pl.extent,
                               "a": (pts[0].X, pts[0].Y), "b": (pts[-1].X, pts[-1].Y)})
+by_name_cls = Counter((f["cls"], f["name"]) for f in feats if f["cls"] in ("PROPOSED", "UNAUTHORIZED")
+                      and re.search(r"proposed|unauthori", f["name"], re.I))
+if by_name_cls:
+    print("classified from the trail NAME:", dict(by_name_cls))
+    shortcut("CLASS_FROM_NAME", sum(by_name_cls.values()), "Segments whose name says Proposed/Unauthorized were classed that way "
+             "even where the Designation field did not say so: %s. Proposed trails are excluded from all routes." % dict(by_name_cls))
 cls_mi = Counter()
 name_mi = Counter()
 for p in parts:
@@ -610,7 +618,7 @@ finish(5)
 # %% ==========================================================================
 # CELL 6 - JUNCTION NETWORK (derived; repairs are explicit connector edges)
 # =============================================================================
-begin(6, "2026-10-20c")
+begin(6, "2026-10-22a")
 hdr("CELL 6 - JUNCTION NETWORK")
 SNAP, AUTO, ASSUME = C["NODE_SNAP_FT"] * U, C["AUTO_JOIN_FT"] * U, C["ASSUMED_JOIN_FT"] * U
 EC = max(ASSUME * 20, 200 * U)
@@ -792,7 +800,7 @@ finish(6)
 # %% ==========================================================================
 # CELL 7 - GRAPH ALGORITHMS (pure Python, tested)
 # =============================================================================
-begin(7, "2026-10-20c")
+begin(7, "2026-10-22a")
 # >>> PURE-GRAPH
 def build_adj(edges, max_tier):
     adj = defaultdict(list)
@@ -826,6 +834,94 @@ def build_links(edges, adj):
         if eid not in used:
             links.append(walk(edges[eid]["u"], eid, edges[eid]["v"]))
     return links
+
+_TOK = {}
+def name_tokens(pub):
+    """'Paved & Red Trail' -> {'Paved Trail', 'Red Trail'}: a shared stretch belongs to BOTH trails."""
+    if pub not in _TOK:
+        parts = [x.strip() for x in re.split(r"\s*&\s*|\s+and\s+", str(pub or "")) if x.strip()]
+        if len(parts) > 1 and re.search(r"\btrail\b", parts[-1], re.I):
+            parts = [x if re.search(r"\btrail\b", x, re.I) else x + " Trail" for x in parts]
+        _TOK[pub] = frozenset(parts)
+    return _TOK[pub]
+
+def block_lengths(links):
+    """Total length of each biconnected block of the link graph. Every simple loop lies inside ONE block,
+    so the largest block is a hard upper bound on loop length (used to PROVE that no long loop exists)."""
+    ladj = link_adj(links)
+    disc, low, t, estack, blocks = {}, {}, [0], [], []
+    for root in sorted(ladj):
+        if root in disc:
+            continue
+        disc[root] = low[root] = t[0]; t[0] += 1
+        stack = [(root, None, iter(ladj[root]))]
+        while stack:
+            u, pe, it = stack[-1]
+            advanced = False
+            for lid, v in it:
+                if lid == pe:
+                    continue
+                if v == u:
+                    blocks.append([lid])                      # self-loop link
+                elif v not in disc:
+                    estack.append(lid)
+                    disc[v] = low[v] = t[0]; t[0] += 1
+                    stack.append((v, lid, iter(ladj[v])))
+                    advanced = True
+                    break
+                elif disc[v] < disc[u]:
+                    estack.append(lid)
+                    low[u] = min(low[u], disc[v])
+            if not advanced:
+                stack.pop()
+                if stack:
+                    par = stack[-1][0]
+                    low[par] = min(low[par], low[u])
+                    if low[u] >= disc[par]:
+                        blk = []
+                        while True:
+                            l = estack.pop()
+                            blk.append(l)
+                            if l == pe:
+                                break
+                        blocks.append(blk)
+    return [sum(links[l]["len"] for l in set(b)) for b in blocks]
+
+def join_pieces(edges, adj, pieces, max_bridge):
+    """Join the pieces of ONE named trail into one route via shortest paths through the network.
+    Returns (joined edge set, bridge edge set, pieces left unjoined because they are > max_bridge away)."""
+    nodes_of = lambda es: {n for i in es for n in (edges[i]["u"], edges[i]["v"])}
+    pieces = [set(p) for p in sorted(pieces, key=lambda p: -sum(edges[i]["len"] for i in p))]
+    cur, rest, bridges = set(pieces[0]), pieces[1:], set()
+    while rest:
+        src = nodes_of(cur)
+        target = {n: k for k, p in enumerate(rest) for n in nodes_of(p)}
+        dist, prev, pq = {n: 0.0 for n in src}, {}, [(0.0, n) for n in sorted(src)]
+        heapq.heapify(pq)
+        hit = None
+        while pq:
+            d, u = heapq.heappop(pq)
+            if d > dist[u]:
+                continue
+            if d > max_bridge:
+                break
+            if u in target:
+                hit = u
+                break
+            for eid, v in adj[u]:
+                nd = d + edges[eid]["len"]
+                if nd < dist.get(v, float("inf")):
+                    dist[v], prev[v] = nd, (u, eid)
+                    heapq.heappush(pq, (nd, v))
+        if hit is None:
+            break
+        n = hit
+        while n not in src:
+            u, eid = prev[n]
+            bridges.add(eid)
+            n = u
+        cur |= rest.pop(target[hit]) | bridges
+    return cur, bridges & cur, rest
 
 def link_adj(links):
     ladj = defaultdict(list)
@@ -1095,7 +1191,7 @@ finish(7)
 # %% ==========================================================================
 # CELL 8 - ROUTE METRICS AND SCORING
 # =============================================================================
-begin(8, "2026-10-20c")
+begin(8, "2026-10-22a")
 def setup_graph():
     global ADJ, DEG
     ADJ = build_adj(edges, MAX_TIER)
@@ -1113,10 +1209,11 @@ def route_metrics(steps, closed, rtype, label_hint=""):
     tr = [e for e in es if e["kind"] == "TRAIL"]
     name_len, surf = Counter(), Counter()
     for e in tr:
-        name_len[e["pub"]] += e["len"]
+        for tk in name_tokens(e["pub"]):
+            name_len[tk] += e["len"]
         surf[e["surf"]] += e["len"]
-    seq = [e["pub"] for e in tr]
-    changes = sum(a != b for a, b in zip(seq, seq[1:])) + (1 if closed and len(seq) > 1 and seq[0] != seq[-1] else 0)
+    seq = [name_tokens(e["pub"]) for e in tr]
+    changes = sum(not (a & b) for a, b in zip(seq, seq[1:])) + (1 if closed and len(seq) > 1 and not (seq[0] & seq[-1]) else 0)
     nodes = {n for s in steps for n in step_nodes(edges, s)}
     decisions = sum(1 for n in nodes if DEG.get(n, 0) >= 3)
     pairs = list(zip(steps, steps[1:])) + ([(steps[-1], steps[0])] if closed and len(steps) > 1 else [])
@@ -1136,7 +1233,8 @@ def route_metrics(steps, closed, rtype, label_hint=""):
                          "CROSSING_TURN x%d" % cross if cross else "",
                          "UNKNOWN_DESIG %.0f%%" % (100 * unk / L) if unk else "",
                          "UNAUTHORIZED %.0f%%" % (100 * una / L) if una else "") if x]
-    score = (100 - 6 * changes - 2 * decisions - 10 * assumed - auto - 8 * cross - 25 * unk / L
+    dec_per_mi = decisions / max(L / MI, 0.25)       # junction density, so long loops are not penalised for length
+    score = (100 - 5 * changes - 3 * dec_per_mi - 10 * assumed - auto - 8 * cross - 25 * unk / L
              + 10 * marked / L + 5 * primary / L + (5 if surf and max(surf.values()) / tl >= 0.9 else 0))
     mi = L / MI
     cls = next((c for c, lo, hi in C["LENGTH_CLASSES"] if lo <= mi < hi), "Long")
@@ -1167,7 +1265,7 @@ finish(8)
 # %% ==========================================================================
 # CELL 9 - GENERATE PARK-WIDE CANDIDATES
 # =============================================================================
-begin(9, "2026-10-20c")
+begin(9, "2026-10-22a")
 hdr("CELL 9 - GENERATE CANDIDATES")
 ROUTES, FAILS = [], []
 def add_route(r):
@@ -1197,7 +1295,9 @@ def find_loops(adj, label, max_loops, work):
         shortcut("LOOPS_SAMPLED_" + label, len(rs), "%s network too dense to list every loop quickly; loops built from a "
                  "minimum cycle basis (%d) grown by beam search (%d rounds, %d evaluated%s)."
                  % (label, st["basis"], st["rounds"], st["evaluated"], ", capped" if st["capped"] else ""))
-    print("   %-7s loops: %s, %d found, %.1f s" % (label, st["method"], len(rs), time.time() - t0))
+    st["max_block_mi"] = round(max(block_lengths(lk), default=0.0) / MI, 2)
+    print("   %-7s loops: %s, %d found, %.1f s | longest loop possible <= %.2f mi (largest loopable block)"
+          % (label, st["method"], len(rs), time.time() - t0, st["max_block_mi"]))
     return rs, st
 
 # Pass A: public-eligible network only -> every loop is publishable by construction
@@ -1220,8 +1320,11 @@ print("   loops kept: %d (public-eligible %d, need Unauthorized %d)" % (
     sum(r["type"] == "LOOP" for r in ROUTES), sum(r["type"] == "LOOP" and r["tier"] <= 1 for r in ROUTES),
     sum(r["type"] == "LOOP" and r["tier"] == 2 for r in ROUTES)))
 
-for nm in sorted({e["pub"] for e in edges if e["kind"] == "TRAIL" and e["pub"] != "Connector" and e["tier"] <= MAX_TIER}):
-    eids = [i for i, e in enumerate(edges) if e["kind"] == "TRAIL" and e["pub"] == nm and e["tier"] <= MAX_TIER]
+PUB_ADJ = build_adj(edges, 1)
+NAMED = sorted({tk for e in edges if e["kind"] == "TRAIL" and e["tier"] <= MAX_TIER
+                for tk in name_tokens(e["pub"]) if tk != "Connector"})
+for nm in NAMED:
+    eids = [i for i, e in enumerate(edges) if e["kind"] == "TRAIL" and e["tier"] <= MAX_TIER and nm in name_tokens(e["pub"])]
     ns = {n for i in eids for n in (edges[i]["u"], edges[i]["v"])}
     eids += [i for i, e in enumerate(edges) if e["kind"].startswith("GAP") and e["u"] in ns and e["v"] in ns]
     uf2 = UF()
@@ -1231,11 +1334,22 @@ for nm in sorted({e["pub"] for e in edges if e["kind"] == "TRAIL" and e["pub"] !
     groups = defaultdict(list)
     for i in eids:
         groups[uf2.f(idx[edges[i]["u"]])].append(i)
-    gl = sorted(groups.values(), key=lambda g: -sum(edges[i]["len"] for i in g))
-    for gi, g in enumerate(gl):
-        shape, steps = order_subgraph(edges, g)
-        add_route(route_metrics(steps, shape == "LOOP", "NAMED_" + shape,
-                                nm + ("" if len(gl) == 1 else " (piece %d of %d)" % (gi + 1, len(gl)))))
+    joined, bridges, rest = join_pieces(edges, PUB_ADJ, list(groups.values()), C["NAMED_BRIDGE_MAX_MI"] * MI)
+    sections = [joined] + rest
+    for si, sec in enumerate(sections):
+        shape, steps = order_subgraph(edges, sorted(sec))
+        lab = nm + ("" if len(sections) == 1 else " (section %d of %d)" % (si + 1, len(sections)))
+        r = route_metrics(steps, shape == "LOOP", "NAMED_" + shape, lab)
+        b_ft = sum(edges[i]["len"] for i in sec & bridges) / U
+        extra = (["BORROWS %.0f ft of other trails" % b_ft] if b_ft else []) + (["BRANCHING"] if shape == "SYSTEM" else [])
+        r["sliver"] = r["mi"] < C["NAMED_MIN_MI"]
+        if r["sliver"]:
+            extra.append("SLIVER")
+        r["flags"] = "; ".join(x for x in [r["flags"]] + extra if x)
+        add_route(r) if shape != "SYSTEM" else ROUTES.append(r)
+named_routes = [r for r in ROUTES if r["type"].startswith("NAMED_")]
+print("   named trails: %d trails -> %d routes (%d joined through other trails, %d slivers)" % (
+    len(NAMED), len(named_routes), sum("BORROWS" in r["flags"] for r in named_routes), sum(r["sliver"] for r in named_routes)))
 
 for L in LINKS:
     da, db = DEG.get(L["a"], 0), DEG.get(L["b"], 0)
@@ -1253,7 +1367,7 @@ finish(9)
 # %% ==========================================================================
 # CELL 10 - SELECT A RECOMMENDED SET
 # =============================================================================
-begin(10, "2026-10-20c")
+begin(10, "2026-10-22a")
 hdr("CELL 10 - RECOMMENDED SET")
 def greedy(pool, k, against=()):
     chosen = []
@@ -1272,16 +1386,25 @@ for cls, lo, hi in C["LENGTH_CLASSES"]:
         core.append(r)
 for cls, lo, hi in C["LENGTH_CLASSES"]:
     if not any(r["class"] == cls for r in core):
-        proven = GSTATS["public"]["method"] == "complete"
+        mb = GSTATS["public"].get("max_block_mi", 99)
+        if mb < lo:
+            why = "can exist: the largest connected loopable area of public trails is only %.2f mi (proof)" % mb
+        elif GSTATS["public"]["method"] == "complete":
+            why = "exists (complete search of every loop)"
+        else:
+            why = "was found (sampled search; up to %.2f mi of loopable public trail exists, so one may exist)" % mb
         shortcut("NO_%s_PUBLIC_LOOP" % cls.upper(), 0, "No public-eligible %s loop (%.0f-%.0f mi) %s." % (
-            cls, lo, min(hi, C["LOOP_MAX_MI"]), "exists on Official/eligible trails (complete search)" if proven
-            else "was found (sampled search; may exist)"))
-for r in greedy([r for r in ROUTES if r["type"] == "LOOP" and r["tier"] == 2], C["PICK_PARKS_DECISION"], core):
-    r["status"] = "PARKS_DECISION"
+            cls, lo, min(hi, C["LOOP_MAX_MI"]), why))
+pdec = []
+for cls, lo, hi in C["LENGTH_CLASSES"]:
+    pool = [r for r in ROUTES if r["type"] == "LOOP" and r["tier"] == 2 and r["class"] == cls]
+    for r in greedy(pool, C["PICK_PARKS_DECISION_PER_CLASS"], core + pdec):
+        r["status"] = "PARKS_DECISION"
+        pdec.append(r)
 for r in ROUTES:
-    if r["type"] in ("NAMED_LINEAR", "NAMED_LOOP") and r["tier"] <= 1:
-        r["status"] = "CORE"
-    elif r["type"] in ("NAMED_SYSTEM", "SPUR", "CONNECTOR") and r["tier"] <= 1 and r["status"] == "CANDIDATE":
+    if r["type"].startswith("NAMED_") and r["tier"] <= 1:
+        r["status"] = "CANDIDATE" if r.get("sliver") else "CORE"
+    elif r["type"] in ("SPUR", "CONNECTOR") and r["tier"] <= 1 and r["status"] == "CANDIDATE":
         r["status"] = "OPTION"
 prefix = {"LOOP": "L", "NAMED_LINEAR": "N", "NAMED_LOOP": "N", "NAMED_SYSTEM": "N", "SPUR": "S", "CONNECTOR": "C"}
 ROUTES.sort(key=lambda r: ({"CORE": 0, "PARKS_DECISION": 1, "OPTION": 2}.get(r["status"], 3), r["type"], r["mi"]))
@@ -1304,7 +1427,7 @@ finish(10)
 # %% ==========================================================================
 # CELL 11 - WRITE NETWORK, ROUTES, MEMBERS (decisions re-applied by ROUTE_KEY)
 # =============================================================================
-begin(11, "2026-10-20c")
+begin(11, "2026-10-22a")
 hdr("CELL 11 - WRITE OUTPUTS")
 detach_work_layers()
 if not REC:
@@ -1410,7 +1533,7 @@ finish(11)
 # %% ==========================================================================
 # CELL 12 - WRITE-UP, REVIEW MAP, PASTE-BACK SUMMARY
 # =============================================================================
-begin(12, "2026-10-20c")
+begin(12, "2026-10-22a")
 hdr("CELL 12 - WRITE-UP + REVIEW MAP")
 tbl = ["| ID | Status | Type | Label | Miles | Names | Surface | Difficulty | Name changes | Flags |", "|" + "---|" * 10]
 tbl += ["| %s | %s | %s | %s | %.2f | %s | %s | %s | %d | %s |" % (r["id"], r["status"], r["type"], r["label"], r["trip_mi"],
@@ -1476,7 +1599,7 @@ finish(12)
 #   set C["BUILDER_ROUTE_NAME"], run this cell. The selection must form one
 #   continuous loop or line. Saved to MCP_Routes_Custom (never overwritten).
 # =============================================================================
-begin(13, "2026-10-20c")
+begin(13, "2026-10-22a")
 hdr("CELL 13 - ROUTE BUILDER")
 def selected_edge_ids():
     for mp in aprx.listMaps():
@@ -1530,7 +1653,7 @@ finish(13)
 #   In MCP_Routes_Recommended or MCP_Routes_Custom, fill PUBLIC_NAME and set
 #   DECISION to KEEP / DROP / REVISE (attribute table), save edits, run this.
 # =============================================================================
-begin(14, "2026-10-20c")
+begin(14, "2026-10-22a")
 hdr("CELL 14 - SAVE DECISIONS + PUBLIC LAYER")
 harvest = {}
 for fc in (gdbp("MCP_Routes_Recommended"), gdbp("MCP_Routes_Custom")):
