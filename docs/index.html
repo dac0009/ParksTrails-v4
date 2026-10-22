@@ -1,0 +1,1045 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Mercer County Park Trails</title>
+<meta name="description" content="Mercer County Park trail data: where it is today, what has been built to clean it up, and how one dataset could run a public map, a staff map, dashboards and data requests.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:ital,wght@0,400;0,600;0,700;1,400&family=Source+Serif+4:opsz,wght@8..60,600;8..60,700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --forest-950:#0c1c15; --forest-900:#11261c; --forest-800:#183326; --forest-600:#2f6a4c; --forest-400:#8fc3a4; --forest-100:#e7efe9;
+  --paper:#f6f4ee; --card:#ffffff; --ink:#18211c; --ink-2:#4d5a53; --ink-3:#77837c; --line:#dcd8cc;
+  --on-dark:#f3f2ec; --on-dark-2:#b9c6be;
+  --official:#2b4bb3; --unauth:#e8772e; --pink:#d9479a; --blue-trail:#2a78d6; --red-trail:#e34948;
+  --good:#2f8a4f; --bad:#c2410c;
+  --m-out:#efede5; --m-park:#e2e9d4; --m-water:#b3d6ea; --m-road:#ffffff; --m-bound:#7a877f;
+  --serif:"Source Serif 4", Georgia, serif;
+  --sans:"Source Sans 3", system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--paper);color:var(--ink);font:400 18px/1.5 var(--sans);transition:background-color .6s ease}
+body[data-theme="dark"]{background:var(--forest-950)}
+h1,h2,h3{font-family:var(--serif);font-weight:700;line-height:1.12;margin:0;letter-spacing:-.01em}
+p{margin:0}
+ul,ol{margin:0;padding:0;list-style:none}
+.kicker{font:700 12px/1.2 var(--sans);letter-spacing:.14em;text-transform:uppercase;color:var(--forest-600);margin-bottom:12px}
+.hid{display:none !important}
+
+/* ================= SCROLLY ================= */
+.scrolly{position:relative}
+.stage{position:sticky;top:0;height:100vh;height:100svh;overflow:hidden;background:var(--m-out)}
+#map{position:absolute;inset:0;width:100%;height:100%;display:block}
+#map .lyr{transition:opacity .7s ease}
+.scrim{position:absolute;inset:0;background:rgba(12,28,21,.72);opacity:0;transition:opacity .8s ease;pointer-events:none}
+.overlay{position:absolute;inset:0;pointer-events:none;overflow:hidden}
+.lbl{position:absolute;transform:translate(-50%,-50%);font:italic 600 14px/1 var(--sans);color:#3f6f8a;white-space:nowrap;text-shadow:0 0 3px #fff,0 0 3px #fff,0 0 3px #fff;opacity:0;transition:opacity .6s ease}
+.lbl.road{font:600 11px/1 var(--sans);font-style:normal;letter-spacing:.06em;text-transform:uppercase;color:#7b847f}
+.lbl.trail{font:700 13px/1 var(--sans);font-style:normal;color:#fff;text-shadow:none;padding:5px 8px;border-radius:5px}
+.lbl.on{opacity:1}
+.jdot{position:absolute;width:12px;height:12px;margin:-6px 0 0 -6px;border-radius:50%;background:#fff;border:3px solid var(--ink);opacity:0;transition:opacity .5s ease}
+.jdot.on{opacity:1}
+.badge{position:absolute;transform:translate(-50%,-50%);min-width:26px;height:26px;border-radius:13px;padding:0 7px;display:grid;place-items:center;
+  font:700 14px/1 var(--sans);color:#fff;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.25);opacity:0;transition:opacity .5s ease;cursor:default}
+.badge.dark-ink{color:#1b231f}
+.badge.on{opacity:1}
+.ring{position:absolute;border:2px dashed var(--unauth);border-radius:50%;opacity:0;transition:opacity .6s ease}
+.ring.on{opacity:1}
+.ring span{position:absolute;left:50%;top:100%;transform:translate(-50%,8px);width:max-content;max-width:44vw;text-align:center;background:#fff;color:var(--ink);font:600 13px/1.2 var(--sans);padding:5px 8px;border-radius:6px;box-shadow:0 1px 4px rgba(0,0,0,.15)}
+.ring.up span{top:auto;bottom:100%;transform:translate(-50%,-8px)}
+
+.steps{position:relative;margin-top:-100vh;margin-top:-100svh;z-index:2;pointer-events:none}
+.step{min-height:92vh;min-height:92svh;display:flex;align-items:center;padding:0 24px}
+.step:first-child{min-height:100vh;min-height:100svh}
+.step:last-child{min-height:105vh}
+.card{pointer-events:auto;position:relative;width:min(440px,36vw);background:rgba(255,255,255,.97);border:1px solid var(--line);border-radius:12px;padding:24px 24px 22px;box-shadow:0 6px 24px rgba(20,30,25,.10)}
+body[data-theme="dark"] .card{background:rgba(17,38,28,.96);border-color:#2a4a3a;color:var(--on-dark);box-shadow:0 8px 28px rgba(0,0,0,.35)}
+body[data-theme="dark"] .card .kicker{color:var(--forest-400)}
+.card h2{font-size:clamp(24px,2.3vw,31px)}
+.card p{margin-top:12px;color:var(--ink-2)}
+body[data-theme="dark"] .card p{color:var(--on-dark-2)}
+.card b{color:var(--ink)}
+body[data-theme="dark"] .card b{color:var(--on-dark)}
+.small{font-size:15px}
+.soft{font-style:italic;font-size:15px}
+
+.step.hero{justify-content:center;text-align:center}
+.hero-in{pointer-events:auto;position:relative;max-width:920px;color:var(--on-dark)}
+.hero-in .kicker{color:var(--forest-400)}
+.hero-in h1{font-size:clamp(38px,6.4vw,80px)}
+.hero-in h1 em{font-style:normal;color:var(--forest-400)}
+.hero-in p{margin:22px auto 0;max-width:42ch;color:var(--on-dark-2);font-size:clamp(18px,2vw,22px)}
+.cue{margin-top:34px;font:600 12px var(--sans);letter-spacing:.14em;text-transform:uppercase;color:var(--on-dark-2)}
+
+.big{font:700 clamp(50px,5.6vw,72px)/1 var(--serif);margin-top:14px;color:var(--unauth)}
+.stack{display:flex;gap:2px;height:14px;margin-top:14px}
+.stack span{display:block;height:100%}
+.stack span:first-child{border-radius:7px 0 0 7px}.stack span:last-child{border-radius:0 7px 7px 0}
+.legend{display:flex;flex-wrap:wrap;gap:4px 14px;margin-top:8px;font-size:14px;color:var(--ink-2)}
+.legend i{display:inline-block;width:14px;height:4px;border-radius:2px;margin-right:6px;vertical-align:3px}
+
+.issues{margin-top:14px;display:grid;gap:9px}
+.issues li{display:grid;grid-template-columns:56px 1fr;gap:10px;align-items:baseline;font-size:16px;color:var(--ink-2);position:relative}
+.issues .n{font:700 22px/1 var(--serif);color:var(--bad);text-align:right}
+
+.pipe{margin-top:14px;display:grid;gap:8px;counter-reset:p}
+.pipe li{position:relative;padding-left:36px;font-size:16px;color:var(--ink-2)}
+.pipe li::before{counter-increment:p;content:counter(p);position:absolute;left:0;top:1px;width:24px;height:24px;border-radius:50%;background:var(--forest-600);color:#fff;font:700 13px/24px var(--sans);text-align:center}
+.pipe b{color:var(--ink)}
+
+.diagram{margin-top:14px;background:#f4f2ea;border-radius:10px;padding:10px}
+.diagram svg{display:block;width:100%;height:auto}
+.rules{margin-top:12px;display:grid;gap:6px;font-size:15px;color:var(--ink-2)}
+.rules li{display:grid;grid-template-columns:86px 1fr;gap:8px}
+.rules li span:first-child{font-weight:700;color:var(--ink)}
+
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px}
+.chips span{font:600 14px/1 var(--sans);padding:7px 10px;border-radius:999px;background:var(--forest-100);color:var(--forest-600)}
+
+.segs{margin-top:12px;border:1px solid var(--line);border-radius:10px;overflow:hidden;font-size:15px}
+.segs div{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;padding:8px 12px;border-top:1px solid var(--line)}
+.segs div:first-child{border-top:0}
+.segs i{width:16px;height:5px;border-radius:3px;display:block}
+.segs code{font:600 13px/1 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;color:var(--ink-3)}
+
+.sign{margin-top:14px;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.sign .top{display:flex;align-items:baseline;gap:10px;padding:12px 16px;background:#fbfaf6}
+.sign .dist{font:700 44px/1 var(--serif)}
+.sign .dist small{font:600 17px var(--sans);color:var(--ink-2)}
+.sign .row{display:flex;justify-content:space-between;gap:12px;padding:8px 16px;border-top:1px solid var(--line);font-size:15px}
+.sign .row span:first-child{color:var(--ink-2)}
+.tag{display:inline-block;margin-left:auto;font:700 10px/1 var(--sans);letter-spacing:.12em;text-transform:uppercase;padding:5px 7px;border-radius:4px;background:#e9efe9;color:var(--forest-600)}
+
+.mini{margin-top:12px;display:grid;gap:10px}
+.mini > div{border:1px solid var(--line);border-radius:10px;padding:12px 14px;position:relative}
+.mini h3{font:700 17px/1.2 var(--sans)}
+.mini p{margin-top:4px;font-size:15px}
+
+.keys{display:flex;flex-wrap:wrap;gap:6px 16px;margin-top:12px;font-size:14px;color:var(--on-dark-2)}
+.keys i{display:inline-block;width:20px;height:7px;border-radius:4px;margin-right:6px;vertical-align:2px}
+.callout{margin-top:14px;padding:12px 14px;border-radius:8px;background:#1d3a2d;color:var(--on-dark) !important;font-size:16px}
+
+/* ================= SECTIONS ================= */
+.section{position:relative;z-index:3;padding:clamp(64px,10vh,110px) 0}
+.section.tint{background:#eef2ea}
+.section.plain{background:var(--paper)}
+.wrap{max-width:1200px;margin:0 auto;padding:0 clamp(16px,4vw,48px)}
+.section h2{font-size:clamp(32px,4.4vw,52px);max-width:22ch}
+.lede{margin-top:14px;color:var(--ink-2);font-size:19px;max-width:60ch}
+
+/* flow */
+.flow{display:grid;grid-template-columns:repeat(4,1fr);gap:0;margin-top:40px;align-items:stretch}
+.fnode{position:relative;background:#fff;border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin-right:34px}
+.fnode:last-child{margin-right:0}
+.fnode:not(:last-child)::after{content:"";position:absolute;right:-28px;top:50%;width:22px;height:2px;background:var(--forest-600)}
+.fnode:not(:last-child)::before{content:"";position:absolute;right:-29px;top:calc(50% - 5px);border:6px solid transparent;border-left-color:var(--forest-600);border-right:0}
+.fnode .k{font:700 11px/1 var(--sans);letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3)}
+.fnode h3{font:700 18px/1.2 var(--sans);margin-top:6px}
+.fnode p{font-size:14px;color:var(--ink-2);margin-top:4px}
+.fnode.core{border:2px solid var(--forest-600);box-shadow:0 0 0 4px var(--forest-100)}
+.fan{height:44px;position:relative;margin:0 12.5%}
+.fan svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
+
+.products{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
+.prod{background:#fff;border:1px solid var(--line);border-radius:14px;padding:16px;display:flex;flex-direction:column;position:relative}
+.prod .who{font:700 11px/1 var(--sans);letter-spacing:.12em;text-transform:uppercase;color:var(--forest-600)}
+.prod h3{font-size:21px;margin-top:6px}
+.prod .desc{font-size:15px;color:var(--ink-2);margin-top:6px}
+.prod .built{margin-top:auto;padding-top:12px;font-size:13px;color:var(--ink-3);border-top:1px solid var(--line)}
+.mock{margin:14px 0;border-radius:12px;overflow:hidden;position:relative;background:var(--m-park);border:1px solid #cfd5c6;height:330px}
+.mock svg{display:block;width:100%;height:100%}
+.phone{width:186px;margin-left:auto;margin-right:auto;border:6px solid #1c2420;border-radius:24px}
+.phone .bar{position:absolute;left:0;right:0;top:0;background:#fff;padding:8px 10px;font:700 12px/1.2 var(--sans);display:flex;justify-content:space-between;align-items:center;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+.phone .bar small{font:600 9px/1 var(--sans);letter-spacing:.1em;text-transform:uppercase;color:var(--forest-600);background:var(--forest-100);padding:3px 5px;border-radius:3px}
+.phone .sheet{position:absolute;left:0;right:0;bottom:0;background:#fff;border-radius:12px 12px 0 0;padding:8px 10px 10px;box-shadow:0 -2px 8px rgba(0,0,0,.1)}
+.phone .sheet .h{width:28px;height:3px;border-radius:2px;background:#ccc;margin:0 auto 6px}
+.phone .item{display:flex;align-items:center;gap:8px;padding:5px 0;font-size:12px;border-top:1px solid #eee}
+.phone .item:first-of-type{border-top:0}
+.phone .item i{width:14px;height:14px;border-radius:7px;flex:none;border:2px solid #fff;box-shadow:0 0 0 1px #ccc}
+.phone .item b{font-weight:700}
+.phone .item span{margin-left:auto;color:var(--ink-3)}
+.laptop{border:6px solid #1c2420;border-radius:10px}
+.laptop .side{position:absolute;left:0;top:0;bottom:0;width:42%;background:rgba(255,255,255,.95);padding:8px;font-size:10px;line-height:1.35;border-right:1px solid #ddd}
+.laptop .side b{display:block;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);margin-bottom:4px}
+.laptop .side div{display:flex;gap:5px;align-items:center;margin:3px 0}
+.laptop .side i{width:12px;height:4px;border-radius:2px;flex:none}
+.laptop .pop{position:absolute;right:5%;top:38%;background:#fff;border-radius:6px;box-shadow:0 2px 8px rgba(0,0,0,.2);padding:7px 8px;font-size:10px;line-height:1.35;width:46%}
+.laptop .pop b{display:block;font-size:11px}
+.dash{background:#14231b;border:6px solid #1c2420;border-radius:10px;padding:8px;display:grid;grid-template-columns:1fr 1fr 1fr;grid-template-rows:auto auto auto 1fr;gap:6px}
+.dash .mapt{grid-column:1/-1;padding:0;overflow:hidden;position:relative;min-height:0}
+.dash .mapt svg{position:absolute;inset:0;width:100%;height:100%}
+.dash .t{background:#1f3529;border-radius:6px;padding:6px;color:#dfe8e1}
+.dash .t b{display:block;font:700 20px/1 var(--serif);color:#fff}
+.dash .t span{font-size:9px;letter-spacing:.06em;text-transform:uppercase;color:#a8bdb0}
+.dash .wide{grid-column:1/-1}
+.dash .sb{display:flex;gap:2px;height:9px;margin-top:6px}
+.dash .sb span{height:100%}
+.open{background:#fff;border:6px solid #1c2420;border-radius:10px;padding:10px;font-size:11px}
+.open .ttl{font:700 13px/1.2 var(--sans)}
+.open .ds{border:1px solid #e3e0d6;border-radius:6px;padding:6px 8px;margin-top:6px}
+.open .ds b{display:block;font-size:11px}
+.open .fmt{display:flex;gap:4px;margin-top:4px}
+.open .fmt span{font:700 9px/1 var(--sans);padding:3px 5px;border-radius:3px;background:var(--forest-100);color:var(--forest-600)}
+.open .req{margin-top:8px;display:inline-block;background:var(--forest-600);color:#fff;font-weight:700;padding:6px 9px;border-radius:5px}
+.linknote{margin-top:22px;display:flex;gap:10px;align-items:flex-start;font-size:16px;color:var(--ink-2);max-width:70ch}
+.linknote b{color:var(--ink)}
+
+/* asks */
+.asks-grid{display:grid;gap:22px;margin-top:40px}
+.ask{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.25fr);gap:28px;align-items:center;background:#fff;border:1px solid var(--line);border-radius:16px;padding:clamp(18px,3vw,32px);position:relative}
+.ask .no{font:700 15px var(--serif);color:#fff;background:var(--forest-600);width:34px;height:34px;border-radius:50%;display:grid;place-items:center;margin-bottom:14px}
+.ask h3{font-size:clamp(24px,2.6vw,32px)}
+.ask .txt p{margin-top:10px;color:var(--ink-2)}
+.ask .fixes{margin-top:14px;font-size:15px;color:var(--ink-2)}
+.ask .fixes b{display:block;font:700 11px/1 var(--sans);letter-spacing:.12em;text-transform:uppercase;color:var(--forest-600);margin-bottom:6px}
+
+.rec{display:grid;grid-template-columns:1fr auto 1fr;gap:12px;align-items:stretch}
+.rec .arrow{align-self:center;font:700 22px/1 var(--sans);color:var(--forest-600)}
+.rcard{border:1px solid var(--line);border-radius:10px;overflow:hidden;font-size:13px}
+.rcard .h{padding:8px 10px;font:700 11px/1 var(--sans);letter-spacing:.1em;text-transform:uppercase}
+.rcard.before .h{background:#fbe9dd;color:var(--bad)}
+.rcard.after .h{background:var(--forest-100);color:var(--forest-600)}
+.rcard .r{display:grid;grid-template-columns:72px 1fr;gap:6px;padding:6px 10px;border-top:1px solid #eee}
+.rcard .r span:first-child{color:var(--ink-3)}
+.rcard .x{color:var(--bad);font-weight:600}
+.rcard .ok{color:var(--good);font-weight:600}
+.rec-note{grid-column:1/-1;font-size:12px;color:var(--ink-3)}
+
+.qa{border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.qa .top{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 12px;background:#f7f6f1;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.qa .top b{font-size:14px}
+.tgl{display:inline-flex;border:1px solid var(--line);border-radius:999px;overflow:hidden;background:#fff}
+.tgl button{font:600 13px/1 var(--sans);border:0;background:transparent;padding:8px 12px;cursor:pointer;color:var(--ink-2)}
+.tgl button.on{background:var(--ink);color:#fff}
+.qa li{display:grid;grid-template-columns:26px 1fr auto;gap:10px;align-items:center;padding:9px 12px;border-top:1px solid #eee;font-size:15px}
+.qa li:first-child{border-top:0}
+.qa .ic{width:22px;height:22px;border-radius:50%;display:grid;place-items:center;font:700 13px/1 var(--sans);color:#fff;background:var(--bad);transition:background .3s}
+.qa .res{font-weight:700;color:var(--bad);font-size:14px;white-space:nowrap}
+.qa.after .ic{background:var(--good)}
+.qa.after .res{color:var(--good)}
+.qa .res .a{display:none}.qa.after .res .a{display:inline}.qa.after .res .b{display:none}
+
+.todo{border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.todo li{display:flex;gap:12px;align-items:flex-start;padding:12px 14px;border-top:1px solid #eee;cursor:pointer;font-size:15px;position:relative}
+.todo li:first-child{border-top:0}
+.todo .box{flex:none;width:22px;height:22px;border-radius:6px;border:2px solid var(--ink-3);display:grid;place-items:center;color:#fff;font:700 14px/1 var(--sans);margin-top:1px}
+.todo li.done .box{background:var(--good);border-color:var(--good)}
+.todo li.done .box::after{content:"✓"}
+.todo b{display:block;font-size:16px}
+.todo span.d{color:var(--ink-2)}
+.todo .opts{display:flex;gap:4px;margin-top:6px;flex-wrap:wrap}
+.todo .opts em{font:600 12px/1 var(--sans);font-style:normal;padding:5px 8px;border-radius:999px;border:1px solid var(--line);color:var(--ink-2)}
+
+.closer{margin-top:clamp(40px,7vh,72px);font:700 clamp(26px,3.6vw,42px)/1.2 var(--serif);max-width:26ch}
+.closer span{color:var(--forest-600)}
+.foot{margin-top:36px;padding-top:16px;border-top:1px solid var(--line);font-size:14px;color:var(--ink-2);max-width:76ch}
+.foot a{color:var(--ink-3)}
+
+.rv{opacity:0;transform:translateY(14px);transition:opacity .7s ease,transform .7s ease}
+.rv.in{opacity:1;transform:none}
+
+@media (max-width:980px){
+  .fan{display:none}
+  .products{grid-template-columns:1fr 1fr;margin-top:30px}
+  .ask{grid-template-columns:1fr}
+}
+@media (max-width:760px){
+  body{font-size:17px}
+  .step{align-items:flex-end;padding:0 10px 14px;min-height:88vh;min-height:88svh}
+  .card{width:100%;padding:18px 18px 16px}
+  .card h2{font-size:22px}
+  .card p{margin-top:8px;font-size:16px}
+  .big{font-size:46px;margin-top:8px}
+  .lbl{font-size:12px}
+  .flow{grid-template-columns:1fr;gap:26px}
+  .fnode{margin-right:0}
+  .fnode:not(:last-child)::after{right:auto;left:50%;top:auto;bottom:-20px;width:2px;height:14px}
+  .fnode:not(:last-child)::before{right:auto;left:calc(50% - 5px);top:auto;bottom:-26px;border:6px solid transparent;border-top-color:var(--forest-600);border-bottom:0}
+  .fan{display:none}
+  .products{grid-template-columns:1fr;margin-top:30px}
+  .rec{grid-template-columns:1fr}
+  .rec .arrow{transform:rotate(90deg);justify-self:center}
+}
+@media (prefers-reduced-motion:reduce){
+  *{transition:none !important}
+  .rv{opacity:1;transform:none}
+}
+
+/* ================= EDITOR ================= */
+.edbar{position:fixed;left:0;right:0;top:0;z-index:100;background:#1b231f;color:#fff;font:600 14px/1.2 var(--sans);display:flex;gap:8px;align-items:center;padding:8px 12px;flex-wrap:wrap;box-shadow:0 2px 10px rgba(0,0,0,.3)}
+.edbar .t{margin-right:auto;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.edbar .st{font-weight:400;color:#b9c6be}
+.edbar button{font:600 13px/1 var(--sans);border:1px solid #3c4a42;background:#26322b;color:#fff;border-radius:6px;padding:8px 10px;cursor:pointer}
+.edbar button.primary{background:var(--forest-600);border-color:var(--forest-600)}
+.edbar button:disabled{opacity:.5;cursor:default}
+body.editing{padding-top:0}
+body.editing .stage{top:48px;height:calc(100svh - 48px)}
+body.editing [data-k]{outline:1px dashed rgba(47,106,76,.55);outline-offset:2px;border-radius:2px;cursor:text}
+body.editing [data-k]:hover{outline:2px solid var(--forest-600);background:rgba(231,239,233,.35)}
+body.editing [data-k]:focus{outline:2px solid #e8772e;background:rgba(255,248,240,.6)}
+body.editing .hidblk{display:block !important;opacity:.35}
+body.editing .step.hidblk{display:flex !important}
+body.editing li.hidblk{display:grid !important}
+body.editing li[data-b]{padding-right:44px}
+body.editing .qa .res .a{display:inline;color:var(--good)}
+body.editing .qa .res .a::before{content:"  →  ";color:var(--ink-3)}
+body.editing .qa.after .res .b{display:inline}
+.eb{position:absolute;top:6px;right:6px;z-index:5;font:700 11px/1 var(--sans);border:1px solid #c9c5b8;background:#fff;color:var(--ink-2);border-radius:5px;padding:5px 7px;cursor:pointer;pointer-events:auto;opacity:.9}
+.eb:hover{opacity:1;border-color:var(--forest-600);color:var(--forest-600)}
+li > .eb{top:50%;transform:translateY(-50%);right:-4px;padding:3px 5px}
+.edmodal{position:fixed;inset:0;z-index:110;background:rgba(10,20,15,.55);display:none;align-items:center;justify-content:center;padding:16px}
+.edmodal.open{display:flex}
+.edmodal .box{background:#fff;color:var(--ink);border-radius:12px;max-width:520px;width:100%;padding:22px;font-size:15px;max-height:90vh;overflow:auto}
+.edmodal h3{font:700 22px/1.2 var(--serif);margin-bottom:10px}
+.edmodal label{display:block;font-weight:600;margin-top:12px}
+.edmodal input[type=text],.edmodal input[type=password]{width:100%;font:15px var(--sans);padding:9px 10px;border:1px solid var(--line);border-radius:6px;margin-top:4px}
+.edmodal .row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.edmodal .help{color:var(--ink-2);font-size:14px;margin-top:6px}
+.edmodal .btns{display:flex;gap:8px;justify-content:flex-end;margin-top:18px}
+.edmodal .btns button{font:600 14px var(--sans);padding:9px 14px;border-radius:6px;border:1px solid var(--line);background:#fff;cursor:pointer}
+.edmodal .btns button.primary{background:var(--forest-600);border-color:var(--forest-600);color:#fff}
+</style>
+</head>
+<body data-theme="dark">
+
+<div class="scrolly">
+  <div class="stage" id="stage">
+    <svg id="map" role="img" aria-label="Map of Mercer County Park trails, redrawn from Parks GIS exports"></svg>
+    <div class="scrim" id="scrim"></div>
+    <div class="overlay" id="overlay"></div>
+  </div>
+
+  <div class="steps">
+
+    <section class="step hero" data-step="hero" data-b="hero">
+      <div class="hero-in">
+        <div class="kicker" data-k="hero.kicker">Mercer County Park · Trail data</div>
+        <h1 data-k="hero.title">From trail pieces to <em>a trail map people can use</em></h1>
+        <p data-k="hero.sub">Where our trail data is today, what I've built to clean it up, and how one dataset could run a public map, a staff map, dashboards and data requests.</p>
+        <div class="cue">Scroll ↓</div>
+      </div>
+    </section>
+
+    <!-- ============ PART 1: TODAY ============ -->
+    <section class="step" data-step="pieces" data-b="pieces">
+      <div class="card">
+        <div class="kicker" data-k="pieces.kicker">1 · Where the data is today</div>
+        <h2 data-k="pieces.title">The park is stored as 232 separate trail pieces</h2>
+        <p data-k="pieces.p1">Together they cover <b>27.3 miles</b>. Each piece is its own record with its own name, status and other details. On this map, every color is a different value in the Name field.</p>
+        <p class="small" data-k="pieces.p2"><b>91 pieces have no name at all.</b> Most are short connectors between the named trails.</p>
+      </div>
+    </section>
+
+    <section class="step" data-step="walks" data-b="walks">
+      <div class="card">
+        <div class="kicker" data-k="walks.kicker">1 · Where the data is today</div>
+        <h2 data-k="walks.title">Visitors think in walks. The data only knows pieces.</h2>
+        <p data-k="walks.p1">A visitor wants "a one-mile loop from where I parked." One walk here can cross Blue Trail, Red Trail, Paved Trail and a few unnamed connectors.</p>
+        <p data-k="walks.p2">The data has no record of the walk itself, so any map built from it can only show the pieces. It can't answer "which loop should I take?"</p>
+      </div>
+    </section>
+
+    <section class="step" data-step="status" data-b="status">
+      <div class="card">
+        <div class="kicker" data-k="status.kicker">1 · Where the data is today</div>
+        <h2 data-k="status.title">30% of the mileage is marked Unauthorized</h2>
+        <div class="big" data-k="status.big" data-count>30%</div>
+        <div class="stack" role="img" aria-label="Official 17.7 miles, Unauthorized 8.2 miles, Proposed and Closed 1.24 miles">
+          <span style="flex:17.7;background:var(--official)"></span><span style="flex:8.2;background:var(--unauth)"></span><span style="flex:1.24;background:#8fa59c"></span>
+        </div>
+        <div class="legend"><span><i style="background:var(--official)"></i><span data-k="status.l1">Official 17.7 mi</span></span><span><i style="background:var(--unauth)"></i><span data-k="status.l2">Unauthorized 8.2 mi</span></span><span><i style="background:#8fa59c"></i><span data-k="status.l3">Proposed / Closed 1.2 mi</span></span></div>
+        <p class="small" data-k="status.p1">That's the Designation field. Unauthorized pieces are mapped paths that aren't part of the official trail system. What they actually are on the ground is something Parks knows better than GIS does.</p>
+        <p class="small" data-k="status.p2">Most of that mileage sits in two areas, circled on the map.</p>
+      </div>
+    </section>
+
+    <section class="step" data-step="issues" data-b="issues">
+      <div class="card">
+        <div class="kicker" data-k="issues.kicker">1 · Where the data is today</div>
+        <h2 data-k="issues.title">A few things I found under the hood</h2>
+        <ul class="issues">
+          <li data-b="iss1"><span class="n" data-k="issues.n1">110</span><span data-k="issues.t1">places where trail ends look connected but don't actually touch</span></li>
+          <li data-b="iss2"><span class="n" data-k="issues.n2">31%</span><span data-k="issues.t2">how much the Length field overstates distance (it was measured on a stretched map projection)</span></li>
+          <li data-b="iss3"><span class="n" data-k="issues.n3">6</span><span data-k="issues.t3">proposed trails stored as if they're already built</span></li>
+          <li data-b="iss4"><span class="n" data-k="issues.n4">14</span><span data-k="issues.t4">pieces whose name contradicts their status</span></li>
+          <li data-b="iss5"><span class="n" data-k="issues.n5">2×</span><span data-k="issues.t5">the same layer is published as two identical online services</span></li>
+        </ul>
+        <p class="soft" data-k="issues.p1">These are normal side effects of collecting trail data piece by piece without a shared standard.</p>
+      </div>
+    </section>
+
+    <!-- ============ PART 2: WHAT I'VE BUILT ============ -->
+    <section class="step" data-step="pipeline" data-b="pipeline">
+      <div class="card">
+        <div class="kicker" data-k="pipe.kicker">2 · What I've built</div>
+        <h2 data-k="pipe.title">An automated clean-up that runs in under a minute</h2>
+        <ol class="pipe">
+          <li data-b="pipe1" data-k="pipe.s1"><b>Pulls the Parks trail layer</b> from ArcGIS Online, read-only. Nothing in the source data is changed.</li>
+          <li data-b="pipe2" data-k="pipe.s2"><b>Keeps only Mercer County Park.</b></li>
+          <li data-b="pipe3" data-k="pipe.s3"><b>Connects the pieces</b> wherever trails meet, so they form one network.</li>
+          <li data-b="pipe4" data-k="pipe.s4"><b>Repairs 110 gaps and 42 crossings</b>, each one flagged for review.</li>
+          <li data-b="pipe5" data-k="pipe.s5"><b>Finds every possible loop</b> and scores it.</li>
+          <li data-b="pipe6" data-k="pipe.s6"><b>Checks every route</b> and writes the map layers plus a report.</li>
+        </ol>
+      </div>
+    </section>
+
+    <section class="step" data-step="gaps" data-b="gaps">
+      <div class="card">
+        <div class="kicker" data-k="gaps.kicker">2 · What I've built</div>
+        <h2 data-k="gaps.title">Repairs are added and labeled, never hidden</h2>
+        <div class="diagram" aria-hidden="true">
+          <svg viewBox="0 0 400 120">
+            <path d="M10 80 C 70 70, 120 40, 182 58" fill="none" stroke="#2b4bb3" stroke-width="6" stroke-linecap="round"/>
+            <path d="M214 62 C 270 78, 330 60, 390 30" fill="none" stroke="#2b4bb3" stroke-width="6" stroke-linecap="round"/>
+            <path d="M182 58 L214 62" fill="none" stroke="#e8772e" stroke-width="4" stroke-dasharray="5 4"/>
+            <circle cx="182" cy="58" r="6" fill="#fff" stroke="#18211c" stroke-width="2.5"/>
+            <circle cx="214" cy="62" r="6" fill="#fff" stroke="#18211c" stroke-width="2.5"/>
+            <text x="198" y="98" text-anchor="middle" font-family="Source Sans 3, sans-serif" font-size="14" font-weight="700" fill="#c2410c">connector · gap 0.88 ft</text>
+            <text x="60" y="108" font-family="Source Sans 3, sans-serif" font-size="13" fill="#4d5a53">trail piece</text>
+            <text x="300" y="98" font-family="Source Sans 3, sans-serif" font-size="13" fill="#4d5a53">trail piece</text>
+          </svg>
+        </div>
+        <p class="small" data-k="gaps.p1">When two trail ends almost meet, the system adds a short connector and records the measured gap. The original lines stay exactly as they were.</p>
+        <ul class="rules">
+          <li data-b="rule1"><span data-k="gaps.r1a">Up to 5 ft</span><span data-k="gaps.r1b">joined automatically</span></li>
+          <li data-b="rule2"><span data-k="gaps.r2a">5 to 15 ft</span><span data-k="gaps.r2b">joined, but marked "assumed, verify"</span></li>
+          <li data-b="rule3"><span data-k="gaps.r3a">Over 15 ft</span><span data-k="gaps.r3b">not joined; it's a question for a field check</span></li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="step" data-step="many" data-b="many">
+      <div class="card">
+        <div class="kicker" data-k="many.kicker">2 · What I've built</div>
+        <h2 data-k="many.title">Then it lists every possible loop: 381 of them</h2>
+        <p data-k="many.p1">Once the pieces connect, the computer can trace every distinct loop you could walk on <b>Official trails only</b>, without walking any stretch twice. It finds 381.</p>
+        <div class="diagram" aria-hidden="true">
+          <svg viewBox="0 0 400 96">
+            <g fill="none" stroke-width="3" stroke-linejoin="round">
+              <path d="M20 70 C 20 30, 60 14, 92 24 C 118 32, 118 70, 92 80 C 66 88, 30 86, 20 70Z" stroke="#2a78d6"/>
+              <path d="M150 70 C 150 30, 190 14, 222 24 C 236 28, 250 40, 240 52 C 232 62, 246 70, 222 80 C 196 88, 160 86, 150 70Z" stroke="#2a78d6"/>
+              <path d="M280 70 C 280 30, 320 14, 352 24 C 378 32, 378 70, 352 80 C 340 84, 336 66, 318 70 C 300 74, 290 86, 280 70Z" stroke="#2a78d6"/>
+            </g>
+            <text x="200" y="94" text-anchor="middle" font-family="Source Sans 3, sans-serif" font-size="12" fill="#4d5a53">three of the 381: the same loop with small detours</text>
+          </svg>
+        </div>
+        <p class="small" data-k="many.p2"><b>That's the same problem in a new form.</b> 381 options is as unusable as 232 pieces. Most are near-copies of each other, and no map or sign can show them all. A visitor needs a handful.</p>
+      </div>
+    </section>
+
+    <section class="step" data-step="pick" data-b="pick">
+      <div class="card">
+        <div class="kicker" data-k="pick.kicker">2 · What I've built</div>
+        <h2 data-k="pick.title">So it scores them and keeps the best 10</h2>
+        <p data-k="pick.p1">Each loop is scored on what makes it easy to follow:</p>
+        <div class="chips"><span data-k="pick.c1">Fewer name changes</span><span data-k="pick.c2">Fewer decision points</span><span data-k="pick.c3">One consistent surface</span><span data-k="pick.c4">Blazed the whole way</span></div>
+        <p data-k="pick.p2">Then it picks <b>10 loops that don't overlap</b>, from <b>0.38 to 2.31 miles</b>. Eight of them are shown here, lettered A–H.</p>
+      </div>
+    </section>
+
+    <!-- ============ PART 3: WHAT IT SUGGESTS ============ -->
+    <section class="step" data-step="visitor" data-b="visitor">
+      <div class="card">
+        <div class="kicker" data-k="vis.kicker">3 · What it suggests</div>
+        <h2 data-k="vis.title">A visitor map could start from just these loops</h2>
+        <p data-k="vis.p1">Take away everything a visitor doesn't need and this is what's left: loops you can start, finish and measure.</p>
+        <p class="small" data-k="vis.p2">Each route keeps a list of the exact source pieces it uses, so nothing in the Parks data has to be cut or renamed to make it.</p>
+        <p class="soft" data-k="vis.p3">Letters are placeholders. Naming is Parks' call.</p>
+      </div>
+    </section>
+
+    <section class="step" data-step="rbbefore" data-b="rbbefore">
+      <div class="card">
+        <div class="kicker" data-k="rb1.kicker">3 · Example</div>
+        <h2 data-k="rb1.title">The Red–Blue loop, as the data has it today</h2>
+        <p data-k="rb1.p1">Near Bridegroom Run, three trail pieces form a natural loop, but they belong to two different trails:</p>
+        <div class="segs">
+          <div><i style="background:var(--blue-trail)"></i><span data-k="rb1.s1">Blue Trail <code>MCP-SEG-0030</code></span><b data-k="rb1.s1l">1,328 ft</b></div>
+          <div><i style="background:var(--red-trail)"></i><span data-k="rb1.s2">Red Trail <code>MCP-SEG-0057</code></span><b data-k="rb1.s2l">1,930 ft</b></div>
+          <div><i style="background:var(--red-trail)"></i><span data-k="rb1.s3">Red Trail <code>MCP-SEG-0058</code></span><b data-k="rb1.s3l">776 ft</b></div>
+        </div>
+        <p class="small" data-k="rb1.p2">The pieces miss each other by 0.04, 0.09 and 0.88 ft where they meet. That's tiny, but it's enough to keep a computer from seeing a loop.</p>
+      </div>
+    </section>
+
+    <section class="step" data-step="rbafter" data-b="rbafter">
+      <div class="card">
+        <div class="kicker" data-k="rb2.kicker">3 · Example</div>
+        <h2 data-k="rb2.title">…and as a visitor route</h2>
+        <div class="sign">
+          <div class="top"><span class="dist" data-k="rb2.dist">0.76 <small>miles</small></span><span class="tag" data-k="rb2.tag">Concept</span></div>
+          <div class="row"><span data-k="rb2.k1">Type</span><b data-k="rb2.v1">Loop</b></div>
+          <div class="row"><span data-k="rb2.k2">Near</span><b data-k="rb2.v2">Bridegroom Run</b></div>
+          <div class="row"><span data-k="rb2.k3">Uses</span><b data-k="rb2.v3">Blue + Red Trail (3 pieces)</b></div>
+          <div class="row"><span data-k="rb2.k4">Name</span><b data-k="rb2.v4">Parks to decide</b></div>
+        </div>
+        <p class="small" data-k="rb2.p1">I sketched this loop by hand before the automated system existed. The system found it on its own.</p>
+      </div>
+    </section>
+
+    <section class="step" data-step="more" data-b="more">
+      <div class="card">
+        <div class="kicker" data-k="more.kicker">3 · More examples</div>
+        <h2 data-k="more.title">The same idea works for shorter trails too</h2>
+        <div class="mini">
+          <div data-b="more1"><h3 data-k="more.a.t">Proposed Trail C · 0.44 mi</h3><p data-k="more.a.p">One Red Trail piece (MCP-SEG-0056) and one Paved Trail piece (MCP-SEG-0223) become one short, linear trail.</p></div>
+          <div data-b="more2"><h3 data-k="more.b.t">Proposed Loop A</h3><p data-k="more.b.p">Uses only <b>part</b> of three longer Red Trail pieces (MCP-SEG-0108, -0109, -0112). The source lines aren't cut; the route just records where it starts and stops on each one.</p></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="step" data-step="decide" data-b="decide">
+      <div class="card">
+        <div class="kicker" data-k="dec.kicker">3 · Needs a Parks decision</div>
+        <h2 data-k="dec.title">Five more loops depend on Unauthorized pieces</h2>
+        <p data-k="dec.p1">These loops (pink) would work as visitor routes, but each one uses at least one stretch marked Unauthorized (orange).</p>
+        <div class="keys"><span><i style="background:var(--pink);opacity:.6"></i><span data-k="dec.k1">Loop that would open up</span></span><span><i style="background:var(--unauth)"></i><span data-k="dec.k2">Unauthorized stretch it needs</span></span></div>
+        <p data-k="dec.p2">GIS won't put an Unauthorized stretch on a public map on its own. Whether each one should be made official, left as is, or closed is a Parks call.</p>
+        <p class="small" data-k="dec.p3">These are also where longer loops come from. In the current data, the longest loop on Official pieces alone is 2.66 mi. With the selected connectors, loops up to 8.38 mi are possible.</p>
+      </div>
+    </section>
+
+  </div>
+</div>
+
+<!-- ============ PART 4: WHERE IT COULD GO ============ -->
+<section class="section tint" id="system" data-b="system">
+  <div class="wrap">
+    <div class="kicker rv" data-k="sys.kicker">4 · Where it could go</div>
+    <h2 class="rv" data-k="sys.title">One trail dataset, four ways to use it</h2>
+    <p class="lede rv" data-k="sys.lede">Today the same layer is published twice and both copies carry the wrong lengths. The idea: one trail layer that Parks maintains, checked before it's published, feeding everything else automatically.</p>
+
+    <div class="flow rv">
+      <div class="fnode" data-b="f1"><div class="k" data-k="sys.f1k">Collect</div><h3 data-k="sys.f1t">Field collection</h3><p data-k="sys.f1p">Field Maps and Trimble, to one standard</p></div>
+      <div class="fnode core" data-b="f2"><div class="k" data-k="sys.f2k">Source of truth</div><h3 data-k="sys.f2t">One trail layer</h3><p data-k="sys.f2p">Every physical piece, maintained by Parks/GIS</p></div>
+      <div class="fnode" data-b="f3"><div class="k" data-k="sys.f3k">Gate</div><h3 data-k="sys.f3t">QA check</h3><p data-k="sys.f3p">Gaps, lengths and names checked before publishing</p></div>
+      <div class="fnode" data-b="f4"><div class="k" data-k="sys.f4k">Built automatically</div><h3 data-k="sys.f4t">Routes</h3><p data-k="sys.f4p">Loops and trails, each linked to its source pieces</p></div>
+    </div>
+    <div class="fan" aria-hidden="true"><svg viewBox="0 0 100 44" preserveAspectRatio="none">
+      <path d="M100 0 V14 H0 V44 M33.3 14 V44 M66.6 14 V44 M100 14 V44" fill="none" stroke="#2f6a4c" stroke-width="2" vector-effect="non-scaling-stroke"/></svg></div>
+
+    <div class="products">
+      <div class="prod rv" data-b="p1">
+        <div class="who" data-k="sys.p1w">For visitors</div>
+        <h3 data-k="sys.p1t">Public trail map</h3>
+        <p class="desc" data-k="sys.p1d">Official loops only, each with a distance, surface and difficulty. Works on a phone.</p>
+        <div class="mock phone" id="mockPhone">
+          <svg></svg>
+          <div class="bar"><span data-k="sys.p1bar">Mercer County Park Trails</span><small>Concept</small></div>
+          <div class="sheet"><div class="h"></div>
+            <div class="item"><i style="background:#e34948"></i><b data-k="sys.p1i1">Red–Blue loop</b><span data-k="sys.p1i1d">0.76 mi</span></div>
+            <div class="item"><i style="background:#1c5cab"></i><b data-k="sys.p1i2">Loop G</b><span data-k="sys.p1i2d">Loop</span></div>
+            <div class="item"><i style="background:#1baf7a"></i><b data-k="sys.p1i3">Loop F</b><span data-k="sys.p1i3d">Loop</span></div>
+          </div>
+        </div>
+        <div class="built" data-k="sys.p1b">ArcGIS Online web map + Instant App or Experience Builder, using a <b>public view</b> of the layer (published routes only)</div>
+      </div>
+      <div class="prod rv" data-b="p2">
+        <div class="who" data-k="sys.p2w">For Parks &amp; GIS staff</div>
+        <h3 data-k="sys.p2t">Internal trail map</h3>
+        <p class="desc" data-k="sys.p2d">Every piece by status, repairs and field checks flagged, and full details on click.</p>
+        <div class="mock laptop" id="mockStaff">
+          <svg></svg>
+          <div class="side"><b data-k="sys.p2lay">Layers</b>
+            <div><i style="background:#2b4bb3"></i><span data-k="sys.p2l1">Official</span></div>
+            <div><i style="background:#e8772e"></i><span data-k="sys.p2l2">Unauthorized</span></div>
+            <div><i style="background:#d9479a;opacity:.6"></i><span data-k="sys.p2l3">Parks decisions</span></div>
+            <div><i style="background:#8fa59c"></i><span data-k="sys.p2l4">Proposed / Closed</span></div>
+          </div>
+          <div class="pop"><b data-k="sys.p2pt">MCP-SEG-0057</b><span data-k="sys.p2pp">Red Trail · Official<br>1,930 ft (true length)<br>Used by: Red–Blue loop</span></div>
+        </div>
+        <div class="built" data-k="sys.p2b">Same layer through a <b>staff-only view</b> with all fields; the public map links here for signed-in staff</div>
+      </div>
+      <div class="prod rv" data-b="p3">
+        <div class="who" data-k="sys.p3w">For managers</div>
+        <h3 data-k="sys.p3t">Dashboard</h3>
+        <p class="desc" data-k="sys.p3d">Miles by status, open decisions and data quality, updating whenever the layer changes.</p>
+        <div class="mock dash">
+          <div class="t"><b data-k="sys.p3n1">27.3</b><span data-k="sys.p3l1">miles mapped</span></div>
+          <div class="t"><b data-k="sys.p3n2">10</b><span data-k="sys.p3l2">loops proposed</span></div>
+          <div class="t"><b data-k="sys.p3n3">5</b><span data-k="sys.p3l3">Parks decisions</span></div>
+          <div class="t wide"><span data-k="sys.p3l4">Miles by status</span>
+            <div class="sb"><span style="flex:17.7;background:#5b7be0"></span><span style="flex:8.2;background:#e8772e"></span><span style="flex:1.24;background:#8fa59c"></span></div></div>
+          <div class="t"><b data-k="sys.p3n5">110</b><span data-k="sys.p3l5">gaps repaired</span></div>
+          <div class="t"><b data-k="sys.p3n6">42</b><span data-k="sys.p3l6">crossings joined</span></div>
+          <div class="t"><b data-k="sys.p3n7">14</b><span data-k="sys.p3l7">name/status conflicts</span></div>
+          <div class="t mapt" id="mockDash"><svg></svg></div>
+        </div>
+        <div class="built" data-k="sys.p3b">ArcGIS Dashboards reading the same layer, so the numbers never go stale</div>
+      </div>
+      <div class="prod rv" data-b="p4">
+        <div class="who" data-k="sys.p4w">For the public &amp; partners</div>
+        <h3 data-k="sys.p4t">Park data requests</h3>
+        <p class="desc" data-k="sys.p4d">Download the published trail data, or request other park data from one place.</p>
+        <div class="mock open">
+          <div class="ttl" data-k="sys.p4ttl">Park data (concept)</div>
+          <div class="ds"><b data-k="sys.p4d1">Trails: public routes</b><div class="fmt"><span>CSV</span><span>GeoJSON</span><span>Shapefile</span></div></div>
+          <div class="ds"><b data-k="sys.p4d2">Trail pieces (official)</b><div class="fmt"><span>CSV</span><span>GeoJSON</span></div></div>
+          <div class="ds"><b data-k="sys.p4d3">Concept loops (for review)</b><div class="fmt"><span>CSV</span><span>GeoJSON</span></div></div>
+          <span class="req" data-k="sys.p4btn">Request other park data →</span>
+          <div style="margin-top:8px;color:var(--ink-3)" data-k="sys.p4foot">Requests go to one inbox, tracked to completion.</div>
+        </div>
+        <div class="built" data-k="sys.p4b">ArcGIS Hub site for downloads + a Survey123 request form that lands in one inbox</div>
+      </div>
+    </div>
+    <p class="linknote rv" data-k="sys.note"><span><b>Everything links back to one layer.</b> Fix a trail once and the public map, the staff map, the dashboard and the downloads all update together. No more duplicate services drifting apart.</span></p>
+  </div>
+</section>
+
+<!-- ============ PART 5: ASKS ============ -->
+<section class="section plain" id="asks" data-b="asks">
+  <div class="wrap">
+    <div class="kicker rv" data-k="asks.kicker">5 · Three asks</div>
+    <h2 class="rv" data-k="asks.title">What it takes to get there</h2>
+    <p class="lede rv" data-k="asks.lede">The tooling exists. These three things keep the data worth running it on.</p>
+
+    <div class="asks-grid">
+      <div class="ask rv" data-b="ask1">
+        <div class="txt">
+          <div class="no">1</div>
+          <h3 data-k="ask1.t">A data collection standard</h3>
+          <p data-k="ask1.p">Map trails junction to junction. Snap endpoints where they meet. Fill in name, status, surface, difficulty and blaze color every time.</p>
+          <div class="fixes"><b data-k="ask1.fk">Prevents</b><span data-k="ask1.f">The 110 gaps, the 91 unnamed pieces, and names that contradict their status.</span></div>
+        </div>
+        <div class="rec">
+          <div class="rcard before">
+            <div class="h" data-k="ask1.bh">A record today</div>
+            <div class="r"><span>Name</span><span class="x" data-k="ask1.b1">— blank</span></div>
+            <div class="r"><span>Status</span><span class="x" data-k="ask1.b2">Official, but name says "Proposed"</span></div>
+            <div class="r"><span>Length</span><span class="x" data-k="ask1.b3">~31% too long</span></div>
+            <div class="r"><span>Ends</span><span class="x" data-k="ask1.b4">Not snapped</span></div>
+            <div class="r"><span>Surface</span><span class="x" data-k="ask1.b5">—</span></div>
+          </div>
+          <div class="arrow">→</div>
+          <div class="rcard after">
+            <div class="h" data-k="ask1.ah">To the standard</div>
+            <div class="r"><span>Name</span><span class="ok" data-k="ask1.a1">✓ Filled (or "Connector")</span></div>
+            <div class="r"><span>Status</span><span class="ok" data-k="ask1.a2">✓ Matches reality</span></div>
+            <div class="r"><span>Length</span><span class="ok" data-k="ask1.a3">✓ True length</span></div>
+            <div class="r"><span>Ends</span><span class="ok" data-k="ask1.a4">✓ Snapped at junctions</span></div>
+            <div class="r"><span>Surface</span><span class="ok" data-k="ask1.a5">✓ + difficulty, blaze</span></div>
+          </div>
+          <div class="rec-note" data-k="ask1.note">Illustrative record combining the issues found across the layer.</div>
+        </div>
+      </div>
+
+      <div class="ask rv" data-b="ask2">
+        <div class="txt">
+          <div class="no">2</div>
+          <h3 data-k="ask2.t">A QA check before publishing</h3>
+          <p data-k="ask2.p">Run the same checks every time before trail data goes live. It takes seconds and it's already written.</p>
+          <div class="fixes"><b data-k="ask2.fk">Catches</b><span data-k="ask2.f">Wrong lengths, proposed trails shown as built, and duplicate copies before the public sees them.</span></div>
+        </div>
+        <div class="qa" id="qa">
+          <div class="top"><b data-k="ask2.qh">Pre-publish check · Mercer County Park</b>
+            <div class="tgl" role="group" aria-label="Show results"><button type="button" class="on" data-qa="before" data-k="ask2.tb">Today</button><button type="button" data-qa="after" data-k="ask2.ta">With the standard</button></div></div>
+          <ul>
+            <li data-b="qa1"><span class="ic">!</span><span data-k="ask2.c1">Trail ends that don't touch</span><span class="res"><span class="b" data-k="ask2.c1b">110 found</span><span class="a" data-k="ask2.c1a">0</span></span></li>
+            <li data-b="qa2"><span class="ic">!</span><span data-k="ask2.c2">Length matches true length</span><span class="res"><span class="b" data-k="ask2.c2b">off by 31%</span><span class="a" data-k="ask2.c2a">matches</span></span></li>
+            <li data-b="qa3"><span class="ic">!</span><span data-k="ask2.c3">Proposed trails marked as built</span><span class="res"><span class="b" data-k="ask2.c3b">6 found</span><span class="a" data-k="ask2.c3a">0</span></span></li>
+            <li data-b="qa4"><span class="ic">!</span><span data-k="ask2.c4">Name agrees with status</span><span class="res"><span class="b" data-k="ask2.c4b">14 conflicts</span><span class="a" data-k="ask2.c4a">0</span></span></li>
+            <li data-b="qa5"><span class="ic">!</span><span data-k="ask2.c5">One published copy</span><span class="res"><span class="b" data-k="ask2.c5b">2 services</span><span class="a" data-k="ask2.c5a">1</span></span></li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="ask rv" data-b="ask3">
+        <div class="txt">
+          <div class="no">3</div>
+          <h3 data-k="ask3.t">The go-ahead to restructure</h3>
+          <p data-k="ask3.p">Let GIS and Parks work through the decisions only Parks can make, then publish the public map.</p>
+          <div class="fixes"><b data-k="ask3.fk">Gets us</b><span data-k="ask3.f">A visitor map built from loops, and one trail layer behind everything.</span></div>
+        </div>
+        <ul class="todo" id="todo">
+          <li data-b="td1"><span class="box"></span><span><b data-k="ask3.d1">Name the recommended loops</b><span class="d" data-k="ask3.d1p">10 loops, 0.38 to 2.31 mi. Temporary letters until Parks picks names.</span></span></li>
+          <li data-b="td2"><span class="box"></span><span><b data-k="ask3.d2">Decide the 5 Unauthorized connectors</b><span class="d" data-k="ask3.d2p">For each one:</span><span class="opts"><em data-k="ask3.o1">Make official</em><em data-k="ask3.o2">Leave as is</em><em data-k="ask3.o3">Close</em></span></span></li>
+          <li data-b="td3"><span class="box"></span><span><b data-k="ask3.d3">Re-segment long trails where they form loops</b><span class="d" data-k="ask3.d3p">Done in the data, without changing anything on the ground.</span></span></li>
+          <li data-b="td4"><span class="box"></span><span><b data-k="ask3.d4">Publish the public map</b><span class="d" data-k="ask3.d4p">From the one layer, through the QA check.</span></span></li>
+        </ul>
+      </div>
+    </div>
+
+    <p class="closer rv" data-k="close">The tooling is done. <span>The standard is what keeps it working.</span></p>
+    <p class="foot"><span data-k="foot">Everything here is a concept for Parks review. No loop names, routes or designations are official. Maps were redrawn from the Parks trail layer as exported from ArcGIS Pro. Parking and restroom locations weren't included because that data wasn't available.</span> <a href="?edit" id="editLink">Edit</a></p>
+  </div>
+</section>
+
+<script src="mapdata.js"></script>
+<script>
+(function(){
+'use strict';
+/* =====================================================================
+   SETTINGS — where the editor saves. Change if the repo moves.
+   ===================================================================== */
+var REPO = { owner:'dac0009', repo:'ParksTrails-v4', branch:'main', path:'docs/content.json' };
+
+var EDIT = /(^|[?&])edit(\b|=|&|$)/.test(location.search.slice(1)) || location.hash === '#edit';
+var reduce = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+var DEFAULTS = {}, HIDDEN_DEFAULT = [];
+document.querySelectorAll('[data-k]').forEach(function(e){ DEFAULTS[e.getAttribute('data-k')] = e.innerHTML.trim(); });
+
+function applyContent(c){
+  if (!c) return;
+  document.querySelectorAll('[data-k]').forEach(function(e){
+    var k=e.getAttribute('data-k'); if (Object.prototype.hasOwnProperty.call(c,k)) e.innerHTML = c[k];
+  });
+  var hid = c.__hidden || [];
+  document.querySelectorAll('[data-b]').forEach(function(e){
+    var on = hid.indexOf(e.getAttribute('data-b'))>=0;
+    e.classList.toggle(EDIT ? 'hidblk' : 'hid', on);
+    if (EDIT) e.classList.remove('hid');
+  });
+}
+
+/* ===================== MAP ===================== */
+var D = window.MAPDATA, NS='http://www.w3.org/2000/svg';
+var svg=document.getElementById('map'), stage=document.getElementById('stage'), overlay=document.getElementById('overlay'), scrim=document.getElementById('scrim');
+function el(tag,attrs,parent){ var e=document.createElementNS(NS,tag); for (var k in attrs) e.setAttribute(k,attrs[k]); if(parent) parent.appendChild(e); return e; }
+function stroke(parent,d,color,w,extra){ var a={d:d,fill:'none',stroke:color,'stroke-width':w,'stroke-linejoin':'round','stroke-linecap':'round','vector-effect':'non-scaling-stroke'}; for (var k in extra||{}) a[k]=extra[k]; return el('path',a,parent); }
+var uid=0;
+function basemap(root){
+  var id='m'+(uid++), defs=el('defs',{},root);
+  var gx=el('linearGradient',{id:id+'x',x1:0,x2:1,y1:0,y2:0},defs);
+  [[0,0],[.04,1],[.96,1],[1,0]].forEach(function(s){ el('stop',{offset:s[0],'stop-color':'#fff','stop-opacity':s[1]},gx); });
+  var gy=el('linearGradient',{id:id+'y',x1:0,x2:0,y1:0,y2:1},defs);
+  [[0,0],[.06,1],[.94,1],[1,0]].forEach(function(s){ el('stop',{offset:s[0],'stop-color':'#fff','stop-opacity':s[1]},gy); });
+  var mx=el('mask',{id:id+'mx',maskUnits:'userSpaceOnUse',x:0,y:0,width:1270,height:802},defs); el('rect',{x:0,y:0,width:1270,height:802,fill:'url(#'+id+'x)'},mx);
+  var my=el('mask',{id:id+'my',maskUnits:'userSpaceOnUse',x:0,y:0,width:1270,height:802},defs); el('rect',{x:0,y:0,width:1270,height:802,fill:'url(#'+id+'y)'},my);
+  var f1=el('g',{mask:'url(#'+id+'mx)'},root), f2=el('g',{mask:'url(#'+id+'my)'},f1);
+  el('rect',{x:0,y:0,width:1270,height:802,fill:'var(--m-park)'},f2);
+  el('path',{d:D.outside,fill:'var(--m-out)'},f2);
+  el('path',{d:D.roads,fill:'var(--m-road)'},f2);
+  el('path',{d:D.water,fill:'var(--m-water)'},f2);
+  stroke(f2,D.boundary,'var(--m-bound)',1.2,{'stroke-dasharray':'5 4'});
+  return {frame:f2, defs:defs};
+}
+var BM = basemap(svg), frame=BM.frame, defs=BM.defs;
+var L={};
+function layer(n){ var g=el('g',{'class':'lyr'},frame); g.style.opacity=0; L[n]=g; return g; }
+layer('names'); D.names.forEach(function(n){ stroke(L.names,n.d,n.c,1.9); });
+layer('desig'); stroke(L.desig,D.oth,'#8fa59c',2); stroke(L.desig,D.off,'#2b4bb3',2); stroke(L.desig,D.una,'#e8772e',2.4);
+layer('green'); [D.off,D.una,D.oth].forEach(function(d){ stroke(L.green,d,'#2f6a4c',2); });
+layer('net'); [D.off,D.una,D.oth].forEach(function(d){ stroke(L.net,d,'#9aa39d',1.3); });
+layer('band'); stroke(L.band,D.band,'#d9479a',11,{'stroke-opacity':.32});
+layer('need'); stroke(L.need,D.need,'#fff',6); stroke(L.need,D.need,'#e8772e',3.4);
+layer('loops');
+var loopEls={};
+D.loops.forEach(function(lp){
+  var g=el('g',{},L.loops);
+  var cas=stroke(g,lp.d,'#fff',7), core=stroke(g,lp.d,lp.c,4);
+  loopEls[lp.id]={g:g,core:core,cas:cas};
+});
+// spotlight detail from the zoomed export, placed on the park frame
+var T=D.spot.t, sg=el('g',{transform:'translate('+T[0]+' '+T[1]+') scale('+T[2]+')'},frame);
+var rg=el('radialGradient',{id:'rg',cx:.5,cy:.5,r:.62},defs);
+[[0,1],[.72,1],[1,0]].forEach(function(s){ el('stop',{offset:s[0],'stop-color':'#fff','stop-opacity':s[1]},rg); });
+var fm=el('mask',{id:'spotfade',maskUnits:'userSpaceOnUse',x:0,y:0,width:1270,height:802},defs); el('rect',{x:0,y:0,width:1270,height:802,fill:'url(#rg)'},fm);
+sg.setAttribute('mask','url(#spotfade)');
+L.spotbase=el('g',{'class':'lyr'},sg); L.spotbase.style.opacity=0;
+el('rect',{x:0,y:0,width:1270,height:802,fill:'var(--m-park)'},L.spotbase);
+el('path',{d:D.spot.road,fill:'var(--m-road)'},L.spotbase);
+el('path',{d:D.spot.water,fill:'var(--m-water)'},L.spotbase);
+stroke(L.spotbase,D.spot.stream,'#8cc3df',1.6); stroke(L.spotbase,D.spot.grey,'#9aa39d',1.6);
+stroke(L.spotbase,D.spot.boundary,'var(--m-bound)',1.2,{'stroke-dasharray':'5 4'});
+L.spotsplit=el('g',{'class':'lyr'},sg); L.spotsplit.style.opacity=0;
+stroke(L.spotsplit,D.spot.blue,'#fff',10); stroke(L.spotsplit,D.spot.blue,'#2a78d6',5.5);
+stroke(L.spotsplit,D.spot.redarc,'#fff',10); stroke(L.spotsplit,D.spot.redarc,'#e34948',5.5);
+L.spotloop=el('g',{'class':'lyr'},sg); L.spotloop.style.opacity=0;
+stroke(L.spotloop,D.spot.red,'#fff',11); stroke(L.spotloop,D.spot.red,'#e34948',6.5);
+function s2m(p){ return [T[0]+p[0]*T[2], T[1]+p[1]*T[2]]; }
+
+// overlay items
+function mkdiv(cls,html){ var d=document.createElement('div'); d.className=cls; if(html) d.innerHTML=html; overlay.appendChild(d); return d; }
+var bm=s2m(D.spot.bluemid), rm=s2m(D.spot.redmid);
+var labels=[
+  {txt:'Mercer County Park Lake',x:470,y:322,cls:'lbl',grp:'base'},
+  {txt:'Richard J. Coffee Blvd',x:470,y:598,cls:'lbl road',grp:'base'},
+  {txt:'Marina',x:640,y:470,cls:'lbl road',grp:'base'},
+  {txt:'Bridegroom Run',x:T[0]+560*T[2],y:T[1]+128*T[2],cls:'lbl',grp:'spot'},
+  {txt:'Blue Trail',x:bm[0],y:bm[1]+5,cls:'lbl trail',grp:'split',bg:'#2a78d6'},
+  {txt:'Red Trail',x:rm[0]-6,y:rm[1]-5,cls:'lbl trail',grp:'split',bg:'#e34948'}
+].map(function(o){ o.el=mkdiv(o.cls,o.txt); if(o.bg) o.el.style.background=o.bg; return o; });
+var jdots=D.spot.junctions.map(function(p){ var q=s2m(p); return {x:q[0],y:q[1],el:mkdiv('jdot')}; });
+var badges=D.loops.map(function(lp){
+  var b=mkdiv('badge'+(['#eda100','#e87ba4','#1baf7a'].indexOf(lp.c)>=0?' dark-ink':''),lp.id);
+  b.style.background=lp.c; b.title='Concept loop '+lp.id;
+  b.addEventListener('mouseenter',function(){ focusLoop(lp.id); }); b.addEventListener('mouseleave',function(){ focusLoop(null); });
+  return {x:lp.badge[0],y:lp.badge[1],el:b};
+});
+function focusLoop(id){ Object.keys(loopEls).forEach(function(k){ loopEls[k].g.style.opacity=(!id||id===k)?1:.2; }); }
+var rings=[
+  {box:[110,395,530,565],txt:'South shore, west of the marina'},
+  {box:[715,410,975,548],txt:'East side, near the Red and Blue trails',up:1}
+].map(function(r){ r.el=mkdiv('ring'+(r.up?' up':''),'<span>'+r.txt+'</span>'); return r; });
+
+var FULL=[40,200,1180,700], WEST=[120,380,560,580], LOOPV=[230,385,1120,640], SPOT=[975,458,1120,572];
+var STEPS={
+  hero:     {theme:'dark',  roi:FULL, show:{names:1}, scrim:1, full:1},
+  pieces:   {theme:'light', roi:FULL, show:{names:1}},
+  walks:    {theme:'light', roi:WEST, mroi:[120,390,420,580], show:{names:1}},
+  status:   {theme:'light', roi:FULL, mroi:[90,370,1000,600], show:{desig:1}, rings:1},
+  issues:   {theme:'light', roi:FULL, show:{names:.3}},
+  pipeline: {theme:'light', roi:FULL, show:{green:1}},
+  gaps:     {theme:'light', roi:WEST, mroi:[120,390,420,580], show:{green:1}},
+  many:     {theme:'light', roi:LOOPV, show:{net:1,loops:.5}, thin:1},
+  pick:     {theme:'light', roi:LOOPV, show:{net:1,loops:1}, badges:1},
+  visitor:  {theme:'light', roi:LOOPV, show:{net:.12,loops:1}, badges:1, wide:1},
+  rbbefore: {theme:'light', roi:SPOT, show:{net:.1,spotbase:1,spotsplit:1}, spot:1, split:1},
+  rbafter:  {theme:'light', roi:SPOT, show:{net:.1,spotbase:1,spotloop:1}, spot:1},
+  more:     {theme:'light', roi:LOOPV, show:{net:1,loops:1}, badges:1},
+  decide:   {theme:'dark',  roi:[0,300,1010,580], mroi:[0,310,560,580], show:{net:.7,band:1,need:1}}
+};
+var cur=null, view=null, anim=null;
+function safeRect(s){
+  var W=stage.clientWidth,H=stage.clientHeight,m=W<=760;
+  if (s.full) return {x:16,y:H*.1,w:W-32,h:H*.8,W:W,H:H,m:m};
+  if (m) return {x:10,y:10,w:W-20,h:H*.48,W:W,H:H,m:m};
+  var col=Math.min(440,W*.36)+48;
+  return {x:col+16,y:28,w:W-col-44,h:H-56,W:W,H:H,m:m};
+}
+function target(s){
+  var r=safeRect(s), roi=(r.m&&s.mroi)?s.mroi:s.roi;
+  var rw=roi[2]-roi[0], rh=roi[3]-roi[1], k=Math.min(r.w/rw,r.h/rh), cx=(roi[0]+roi[2])/2, cy=(roi[1]+roi[3])/2;
+  return {mx:cx+(r.W/2-(r.x+r.w/2))/k, my:cy+(r.H/2-(r.y+r.h/2))/k, k:k};
+}
+function place(o,P){ var p=P(o.x,o.y); o.el.style.left=p[0]+'px'; o.el.style.top=p[1]+'px'; }
+function apply(v){
+  var W=stage.clientWidth,H=stage.clientHeight, x0=v.mx-W/2/v.k, y0=v.my-H/2/v.k;
+  svg.setAttribute('viewBox',x0+' '+y0+' '+(W/v.k)+' '+(H/v.k));
+  function P(x,y){ return [(x-x0)*v.k,(y-y0)*v.k]; }
+  labels.forEach(function(o){place(o,P);}); badges.forEach(function(o){place(o,P);}); jdots.forEach(function(o){place(o,P);});
+  rings.forEach(function(o){
+    var a=P(o.box[0],o.box[1]), b=P(o.box[2],o.box[3]);
+    o.el.style.left=a[0]+'px'; o.el.style.top=a[1]+'px'; o.el.style.width=(b[0]-a[0])+'px'; o.el.style.height=(b[1]-a[1])+'px';
+    var sp=o.el.firstChild, cx=(a[0]+b[0])/2, half=(sp.offsetWidth||160)/2, want=Math.max(8+half,Math.min(W-8-half,cx));
+    sp.style.left=(want-a[0])+'px';
+  });
+}
+function go(to){
+  if (anim) cancelAnimationFrame(anim);
+  if (!view||reduce){ view=to; apply(view); return; }
+  var from={mx:view.mx,my:view.my,k:view.k}, t0=null, dur=1100;
+  function f(ts){ if(!t0)t0=ts; var p=Math.min((ts-t0)/dur,1), e=p<.5?4*p*p*p:1-Math.pow(-2*p+2,3)/2;
+    view={mx:from.mx+(to.mx-from.mx)*e,my:from.my+(to.my-from.my)*e,k:Math.exp(Math.log(from.k)+(Math.log(to.k)-Math.log(from.k))*e)};
+    apply(view); if(p<1) anim=requestAnimationFrame(f); }
+  anim=requestAnimationFrame(f);
+}
+function setStep(id){
+  if (id===cur) return; cur=id; var s=STEPS[id]; if(!s) return;
+  document.body.setAttribute('data-theme',s.theme);
+  Object.keys(L).forEach(function(k){ L[k].style.opacity=s.show[k]||0; });
+  Object.keys(loopEls).forEach(function(k){ var c=loopEls[k]; c.core.setAttribute('stroke-width',s.wide?5.5:(s.thin?2.5:4)); c.cas.setAttribute('stroke-width',s.wide?10:(s.thin?4:7)); c.g.style.opacity=1; });
+  scrim.style.opacity=s.scrim?1:0;
+  labels.forEach(function(o){ var on = o.grp==='spot'? !!s.spot : o.grp==='split'? !!s.split : (!s.scrim && !s.spot); o.el.classList.toggle('on',on); });
+  jdots.forEach(function(o){ o.el.classList.toggle('on',!!s.split); });
+  badges.forEach(function(o){ o.el.classList.toggle('on',!!s.badges); o.el.style.pointerEvents=s.badges?'auto':'none'; });
+  rings.forEach(function(o){ o.el.classList.toggle('on',!!s.rings); });
+  go(target(s));
+}
+
+/* counters: animate the number already written in the element */
+function count(e){
+  if (EDIT||e._done) return; e._done=1;
+  var txt=e.textContent, m=txt.match(/^(\D*)([\d,]+(?:\.\d+)?)(.*)$/); if(!m||reduce) return;
+  var n=parseFloat(m[2].replace(/,/g,'')), dec=(m[2].split('.')[1]||'').length, t0=null;
+  function f(ts){ if(!t0)t0=ts; var p=Math.min((ts-t0)/1100,1), v=n*(1-Math.pow(1-p,3));
+    e.textContent=m[1]+v.toFixed(dec)+m[3]; if(p<1) requestAnimationFrame(f); else e.textContent=txt; }
+  requestAnimationFrame(f);
+}
+function stepEls(){ return Array.prototype.filter.call(document.querySelectorAll('.step'),function(s){ return !s.classList.contains('hid'); }); }
+function onScroll(){
+  var list=stepEls(); if(!list.length) return;
+  var line=innerHeight*(innerWidth<=760?.72:.55), best=list[0];
+  list.forEach(function(s){ if(s.getBoundingClientRect().top<=line) best=s; });
+  var id=best.getAttribute('data-step');
+  if (id!==cur){ setStep(id); best.querySelectorAll('[data-count]').forEach(count); }
+}
+
+/* ===================== MOCKUP MINI MAPS ===================== */
+function mini(container, roi, draw){
+  var s=container.querySelector('svg'); s.setAttribute('viewBox',roi.join(' ')); s.setAttribute('preserveAspectRatio','xMidYMid slice');
+  var f=basemap(s).frame; draw(f);
+}
+mini(document.getElementById('mockPhone'),[905,395,205,365],function(f){
+  [D.off].forEach(function(d){ stroke(f,d,'#b5bdb3',1); });
+  D.loops.forEach(function(lp){ stroke(f,lp.d,'#fff',5); stroke(f,lp.d,lp.c,3); });
+});
+mini(document.getElementById('mockStaff'),[480,380,640,400],function(f){
+  stroke(f,D.band,'#d9479a',7,{'stroke-opacity':.3});
+  stroke(f,D.oth,'#8fa59c',1.2); stroke(f,D.off,'#2b4bb3',1.2); stroke(f,D.una,'#e8772e',1.4);
+});
+
+mini(document.getElementById('mockDash'),[100,300,1020,360],function(f){
+  stroke(f,D.oth,'#8fa59c',1); stroke(f,D.off,'#2b4bb3',1); stroke(f,D.una,'#e8772e',1.2);
+});
+
+/* ===================== QA + TODO ===================== */
+document.querySelectorAll('#qa [data-qa]').forEach(function(b){
+  b.addEventListener('click',function(e){ if(EDIT && e.target.isContentEditable) return;
+    var after=b.getAttribute('data-qa')==='after';
+    document.getElementById('qa').classList.toggle('after',after);
+    document.querySelectorAll('#qa [data-qa]').forEach(function(x){ x.classList.toggle('on',x===b); });
+    document.querySelectorAll('#qa .ic').forEach(function(i){ i.textContent=after?'✓':'!'; });
+  });
+});
+document.querySelectorAll('#todo li').forEach(function(li){
+  li.addEventListener('click',function(e){ if(EDIT) return; li.classList.toggle('done'); });
+});
+
+/* ===================== START ===================== */
+function start(content){
+  applyContent(content);
+  addEventListener('scroll',onScroll,{passive:true});
+  addEventListener('resize',function(){ if(cur){ view=target(STEPS[cur]); apply(view); } });
+  setStep('hero'); onScroll();
+  if ('IntersectionObserver' in window && !EDIT){
+    var io=new IntersectionObserver(function(es){ es.forEach(function(e){ if(e.isIntersecting){ e.target.classList.add('in'); io.unobserve(e.target);} }); },{threshold:.15});
+    document.querySelectorAll('.rv').forEach(function(e){ io.observe(e); });
+  } else document.querySelectorAll('.rv').forEach(function(e){ e.classList.add('in'); });
+  if (EDIT) startEditor(content||{});
+}
+var loaded=false;
+function boot(c){ if(loaded) return; loaded=true; start(c); }
+if (location.protocol==='file:') boot(null);
+else {
+  fetch('content.json',{cache:'no-store'}).then(function(r){ return r.ok?r.json():null; }).then(boot).catch(function(){ boot(null); });
+  setTimeout(function(){ boot(null); },2500);
+}
+
+/* =====================================================================
+   EDITOR  (open the page with ?edit at the end of the address)
+   ===================================================================== */
+function startEditor(saved){
+  document.body.classList.add('editing');
+  var DRAFT='mcp-trails-draft:'+location.pathname, TOK='mcp-trails-token';
+  var hidden=(saved.__hidden||[]).slice();
+  var dirty=false;
+
+  var bar=document.createElement('div'); bar.className='edbar';
+  bar.innerHTML='<div class="t"><span>✎ Edit mode</span><span class="st" id="edst">Click any outlined text to change it. Use “Hide” to drop a block.</span></div>'+
+    '<button type="button" id="edsave" class="primary">Save to GitHub</button>'+
+    '<button type="button" id="eddl">Download content.json</button>'+
+    '<button type="button" id="edundo">Discard draft</button>'+
+    '<button type="button" id="edset">Settings</button>'+
+    '<button type="button" id="edexit">Exit</button>';
+  document.body.appendChild(bar);
+  var st=bar.querySelector('#edst');
+  function status(t){ st.textContent=t; }
+
+  var modal=document.createElement('div'); modal.className='edmodal';
+  modal.innerHTML='<div class="box"><h3>Save to GitHub</h3>'+
+    '<p class="help">The editor saves your text to <b>content.json</b> in the repo. GitHub Pages republishes the site about a minute later.</p>'+
+    '<div class="row2"><label>Owner<input type="text" id="mo"></label><label>Repository<input type="text" id="mr"></label></div>'+
+    '<div class="row2"><label>Branch<input type="text" id="mb"></label><label>File path<input type="text" id="mp"></label></div>'+
+    '<label>GitHub token<input type="password" id="mt" autocomplete="off" placeholder="github_pat_…"></label>'+
+    '<p class="help">Create one at GitHub → Settings → Developer settings → Fine-grained tokens. Choose <b>Only select repositories</b> → this repo, and give it <b>Contents: Read and write</b>.</p>'+
+    '<label style="font-weight:400"><input type="checkbox" id="mrem"> Remember the token on this computer (otherwise it’s forgotten when you close the tab)</label>'+
+    '<div class="btns"><button type="button" id="mcancel">Cancel</button><button type="button" id="mok" class="primary">Save</button></div></div>';
+  document.body.appendChild(modal);
+  var cfg=(function(){ try{ return JSON.parse(localStorage.getItem('mcp-trails-repo'))||REPO; }catch(e){ return REPO; } })();
+  function getTok(){ try{ return sessionStorage.getItem(TOK)||localStorage.getItem(TOK)||''; }catch(e){ return ''; } }
+
+  // make text editable
+  document.querySelectorAll('[data-k]').forEach(function(e){
+    e.setAttribute('contenteditable','true'); e.spellcheck=true;
+    e.addEventListener('input',function(){ dirty=true; saveDraft(); });
+    e.addEventListener('paste',function(ev){ ev.preventDefault(); var t=(ev.clipboardData||window.clipboardData).getData('text/plain'); document.execCommand('insertText',false,t); });
+    e.addEventListener('keydown',function(ev){ if(ev.key==='Enter' && !ev.shiftKey){ ev.preventDefault(); e.blur(); } });
+  });
+  // hide / show blocks
+  document.querySelectorAll('[data-b]').forEach(function(blk){
+    var host=blk.querySelector(':scope > .card, :scope > .hero-in')||blk;
+    var b=document.createElement('button'); b.type='button'; b.className='eb'; b.setAttribute('contenteditable','false');
+    function lab(){ b.textContent = hidden.indexOf(blk.getAttribute('data-b'))>=0 ? 'Show' : 'Hide'; }
+    lab();
+    b.addEventListener('click',function(ev){ ev.preventDefault(); ev.stopPropagation();
+      var k=blk.getAttribute('data-b'), i=hidden.indexOf(k);
+      if(i>=0) hidden.splice(i,1); else hidden.push(k);
+      blk.classList.toggle('hidblk', i<0); lab(); dirty=true; saveDraft(); });
+    if (getComputedStyle(host).position==='static') host.style.position='relative';
+    host.appendChild(b);
+  });
+
+  function clean(html){
+    var t=document.createElement('template'); t.innerHTML=html;
+    (function walk(n){
+      Array.prototype.slice.call(n.childNodes).forEach(function(c){
+        if (c.nodeType===1){
+          var tag=c.tagName.toLowerCase();
+          if (c.classList && c.classList.contains('eb')){ c.remove(); return; }
+          walk(c);
+          if (['b','strong','i','em','br','small','code','span'].indexOf(tag)<0){ while(c.firstChild) n.insertBefore(c.firstChild,c); c.remove(); return; }
+          Array.prototype.slice.call(c.attributes).forEach(function(a){ if(!(tag==='span'&&a.name==='class')) c.removeAttribute(a.name); });
+        } else if (c.nodeType!==3) c.remove();
+      });
+    })(t.content);
+    return t.innerHTML.replace(/&nbsp;/g,' ').trim();
+  }
+  function collect(){
+    var out={};
+    document.querySelectorAll('[data-k]').forEach(function(e){
+      var k=e.getAttribute('data-k'), v=clean(e.innerHTML);
+      if (v!==clean(DEFAULTS[k]) || Object.prototype.hasOwnProperty.call(saved,k)) out[k]=v;
+    });
+    out.__hidden=hidden.slice();
+    out.__updated=new Date().toISOString();
+    return out;
+  }
+  function saveDraft(){ try{ localStorage.setItem(DRAFT,JSON.stringify(collect())); }catch(e){} status('Unsaved changes (kept in this browser as a draft).'); }
+  try{ var dr=JSON.parse(localStorage.getItem(DRAFT)||'null'); if(dr){ applyContent(dr); hidden=(dr.__hidden||[]).slice();
+    document.querySelectorAll('.eb').forEach(function(b){ var blk=b.closest('[data-b]'); b.textContent=hidden.indexOf(blk.getAttribute('data-b'))>=0?'Show':'Hide'; });
+    dirty=true; status('Restored your unsaved draft from this browser.'); } }catch(e){}
+
+  function b64(s){ return btoa(unescape(encodeURIComponent(s))); }
+  function api(path,opt){ opt=opt||{}; opt.headers=Object.assign({'Accept':'application/vnd.github+json','Authorization':'Bearer '+getTok()},opt.headers||{});
+    return fetch('https://api.github.com/repos/'+cfg.owner+'/'+cfg.repo+'/contents/'+path,opt); }
+  function push(){
+    var body=JSON.stringify(collect(),null,2)+'\n';
+    status('Saving to GitHub…'); bar.querySelector('#edsave').disabled=true;
+    return api(cfg.path+'?ref='+encodeURIComponent(cfg.branch),{cache:'no-store'})
+      .then(function(r){ if(r.status===404) return null; if(!r.ok) throw r; return r.json(); })
+      .then(function(meta){
+        var payload={message:'Update trail presentation text',content:b64(body),branch:cfg.branch};
+        if(meta&&meta.sha) payload.sha=meta.sha;
+        return api(cfg.path,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+      })
+      .then(function(r){ if(!r.ok) throw r; return r.json(); })
+      .then(function(j){ dirty=false; try{ localStorage.removeItem(DRAFT); }catch(e){}
+        status('Saved ✓ Commit '+(j.commit&&j.commit.sha||'').slice(0,7)+'. The live site updates in about a minute.'); })
+      .catch(function(r){ var code=r&&r.status;
+        status(code===401||code===403 ? 'GitHub refused the token (check it has Contents: Read and write on this repo).' :
+               code===404 ? 'Repo or branch not found. Check Settings.' : code===409||code===422 ? 'Someone else saved first. Reload, then try again.' :
+               'Save failed. Your draft is still kept in this browser.'); })
+      .then(function(){ bar.querySelector('#edsave').disabled=false; });
+  }
+  function openModal(){
+    modal.querySelector('#mo').value=cfg.owner; modal.querySelector('#mr').value=cfg.repo; modal.querySelector('#mb').value=cfg.branch; modal.querySelector('#mp').value=cfg.path;
+    modal.querySelector('#mt').value=getTok(); modal.classList.add('open');
+  }
+  modal.querySelector('#mcancel').onclick=function(){ modal.classList.remove('open'); };
+  modal.querySelector('#mok').onclick=function(){
+    cfg={owner:modal.querySelector('#mo').value.trim(),repo:modal.querySelector('#mr').value.trim(),branch:modal.querySelector('#mb').value.trim()||'main',path:modal.querySelector('#mp').value.trim()||'docs/content.json'};
+    try{ localStorage.setItem('mcp-trails-repo',JSON.stringify(cfg)); }catch(e){}
+    var t=modal.querySelector('#mt').value.trim();
+    try{ sessionStorage.setItem(TOK,t); if(modal.querySelector('#mrem').checked) localStorage.setItem(TOK,t); else localStorage.removeItem(TOK); }catch(e){}
+    modal.classList.remove('open'); if(t) push();
+  };
+  bar.querySelector('#edsave').onclick=function(){ if(!getTok()) openModal(); else push(); };
+  bar.querySelector('#edset').onclick=openModal;
+  bar.querySelector('#eddl').onclick=function(){
+    var a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([JSON.stringify(collect(),null,2)+'\n'],{type:'application/json'}));
+    a.download='content.json'; document.body.appendChild(a); a.click(); a.remove();
+    status('Downloaded. Put it in the docs folder of the repo to publish it.');
+  };
+  bar.querySelector('#edundo').onclick=function(){ if(confirm('Throw away unsaved changes in this browser?')){ try{ localStorage.removeItem(DRAFT); }catch(e){} location.reload(); } };
+  bar.querySelector('#edexit').onclick=function(){ if(dirty && !confirm('You have unsaved changes (kept as a draft in this browser). Exit anyway?')) return; location.href=location.pathname; };
+  addEventListener('beforeunload',function(e){ if(dirty){ e.preventDefault(); e.returnValue=''; } });
+}
+})();
+</script>
+</body>
+</html>
